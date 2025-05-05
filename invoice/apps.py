@@ -51,6 +51,7 @@ DEFAULT_CONFIG = {
     # To be specified as "module_name.submodule.function_name"
     "bill_user_filter_function": None,
     "invoice_user_filter_function": None,
+    "cron_auro_generate_invoices": None
 }
 
 logger = logging.getLogger(__name__)
@@ -97,6 +98,7 @@ class InvoiceConfig(AppConfig, ConfigUtilMixin):
 
     bill_user_filter = None
     invoice_user_filter = None
+    cron_auro_generate_invoices = None
 
     def ready(self):
         from core.models import ModuleConfiguration
