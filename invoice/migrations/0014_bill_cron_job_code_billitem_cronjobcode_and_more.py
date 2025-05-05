@@ -18,7 +18,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddField(
             model_name='historicalinvoicelineitem',
-            name='cronjobcode',
+            name='cron_job_code',
             field=models.CharField(db_column='CronJobCode', db_index=True, default=uuid.uuid4, max_length=255),
         ),
         migrations.AddField(
@@ -28,7 +28,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddField(
             model_name='invoicelineitem',
-            name='cronjobcode',
+            name='cron_job_code',
             field=models.CharField(db_column='CronJobCode', default=uuid.uuid4, max_length=255, unique=True),
         ),
     ]
