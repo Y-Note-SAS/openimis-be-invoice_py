@@ -21,7 +21,7 @@ def invoice_generation_job():
     Cette fonction cree les factures automatique en fontion des RFC
     """
     print("Crontab for invoices generation started...")
-    if InvoiceConfig.cron_auro_generate_invoices:
+    if InvoiceConfig.cron_auro_generate_invoices or 1==1:
         today = py_datetime.today()
         all_invoices = Invoice.objects.filter(
             date_valid_to__date=today.date())
@@ -168,7 +168,7 @@ def invoice_generation_job():
                                                             "amount_net": government_amount,
                                                             "amount_total": government_amount,
                                                             "status": 1,
-                                                            "cronjobcode": code
+                                                            "cron_job_code": code
                                                         }
                                                         if policy.family.head_insuree:
                                                             values["subject_id"] = family.head_insuree.id
@@ -199,7 +199,7 @@ def invoice_generation_job():
                                                                 "unit_price": government_amount,
                                                                 "amount_net": government_amount,
                                                                 "amount_total": government_amount,
-                                                                "cronjobcode": code
+                                                                "cron_job_code": code
                                                             }
                                                             if family_amount > 0:
                                                                 # update code as two invoice will be
@@ -223,7 +223,7 @@ def invoice_generation_job():
                                                             "amount_net": family_amount,
                                                             "amount_total": family_amount,
                                                             "status": 1,
-                                                            "cronjobcode": code
+                                                            "cron_job_code": code
                                                         }
                                                         if policy.family.head_insuree:
                                                             gov_values["subject_id"] = policy.\
@@ -250,7 +250,7 @@ def invoice_generation_job():
                                                                     "unit_price": family_amount,
                                                                     "amount_net": family_amount,
                                                                     "amount_total": family_amount,
-                                                                    "cronjobcode": code
+                                                                    "cron_job_code": code
                                                                 }
                                                             )
                                                             logger.warning(
