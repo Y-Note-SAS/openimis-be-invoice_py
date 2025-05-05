@@ -127,7 +127,7 @@ def invoice_generation_job():
                                                 for membre in members:
                                                     insuree_numbers += str(membre.id)
                                                 code = insuree_numbers + str(today.year) + str(today.month)
-                                                code += "-" + str(py_datetime.now().date())
+                                                code += "-" + str(py_datetime.now())
                                                 date_due = today + datetimedelta(
                                                     months=1
                                                 )
@@ -205,7 +205,7 @@ def invoice_generation_job():
                                                                 # update code as two invoice will be
                                                                 # created as the code is unique
                                                                 item_values["code"] = item_values["code"] + "-G" +\
-                                                                str(py_datetime.now().date())
+                                                                str(py_datetime.now())
                                                             result = invoice_line_item_service.create(
                                                                 item_values
                                                             )
