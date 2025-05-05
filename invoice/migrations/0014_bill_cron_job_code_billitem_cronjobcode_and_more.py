@@ -7,7 +7,7 @@ import uuid
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('invoice', '0014_alter_bill_code_alter_billitem_code_and_more'),
+        ('invoice', '0013_alter_bill_code_ext_alter_bill_code_tp_and_more'),
     ]
 
     operations = [
