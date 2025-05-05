@@ -9,6 +9,7 @@ from invoice.apps import InvoiceConfig
 from django.utils.translation import gettext as _
 # Create your models here.
 from invoice.mixins import GenericInvoiceQuerysetMixin, GenericInvoiceManager
+import uuid
 
 
 def get_default_currency():
@@ -32,7 +33,7 @@ class GenericInvoice(GenericInvoiceQuerysetMixin, HistoryBusinessModel):
     thirdparty = GenericForeignKey('thirdparty_type', 'thirdparty_id')
 
     code_tp = models.CharField(db_column='CodeTp', max_length=255, blank=True, null=True)
-    code = models.CharField(db_column='Code', max_length=255, null=False, unique=True)
+    code = models.CharField(db_column='Code', max_length=255, null=False)
     code_ext = models.CharField(db_column='CodeExt', max_length=255, blank=True, null=True)
 
     date_due = DateField(db_column='DateDue', blank=True, null=True)
@@ -68,7 +69,7 @@ class GenericInvoice(GenericInvoiceQuerysetMixin, HistoryBusinessModel):
 
 
 class GenericInvoiceLineItem(GenericInvoiceQuerysetMixin, HistoryBusinessModel):
-    code = models.CharField(db_column='Code', max_length=255, null=False, unique=True)
+    code = models.CharField(db_column='Code', max_length=255, null=False)
 
     description = models.TextField(db_column='Description', blank=True, null=True)
     details = models.JSONField(db_column='Details', blank=True, null=True)
@@ -148,6 +149,7 @@ class Invoice(GenericInvoice):
     subject = GenericForeignKey('subject_type', 'subject_id')
 
     date_invoice = DateField(db_column='DateInvoice', default=date.today,  blank=True, null=True)
+    cron_job_code = models.CharField(db_column='CronJobCode', max_length=255, default=uuid.uuid4, unique=True)
 
     class Meta:
         managed = True
@@ -161,6 +163,7 @@ class InvoiceLineItem(GenericInvoiceLineItem):
     line = GenericForeignKey('line_type', 'line_id')
 
     invoice = models.ForeignKey(Invoice, models.DO_NOTHING, db_column='InvoiceId', related_name="line_items")
+    cronjobcode = models.CharField(db_column='CronJobCode', max_length=255, default=uuid.uuid4, unique=True)
 
     class Meta:
         managed = True

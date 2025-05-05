@@ -167,7 +167,8 @@ def invoice_generation_job():
                                                             "date_valid_to": date_valid_to,
                                                             "amount_net": government_amount,
                                                             "amount_total": government_amount,
-                                                            "status": 1
+                                                            "status": 1,
+                                                            "cronjobcode": code
                                                         }
                                                         if policy.family.head_insuree:
                                                             values["subject_id"] = family.head_insuree.id
@@ -197,7 +198,8 @@ def invoice_generation_job():
                                                                 "quantity": quantity,
                                                                 "unit_price": government_amount,
                                                                 "amount_net": government_amount,
-                                                                "amount_total": government_amount
+                                                                "amount_total": government_amount,
+                                                                "cronjobcode": code
                                                             }
                                                             if family_amount > 0:
                                                                 # update code as two invoice will be
@@ -220,7 +222,8 @@ def invoice_generation_job():
                                                             "date_valid_to": date_valid_to,
                                                             "amount_net": family_amount,
                                                             "amount_total": family_amount,
-                                                            "status": 1
+                                                            "status": 1,
+                                                            "cronjobcode": code
                                                         }
                                                         if policy.family.head_insuree:
                                                             gov_values["subject_id"] = policy.\
@@ -246,7 +249,8 @@ def invoice_generation_job():
                                                                     "quantity": quantity,
                                                                     "unit_price": family_amount,
                                                                     "amount_net": family_amount,
-                                                                    "amount_total": family_amount
+                                                                    "amount_total": family_amount,
+                                                                    "cronjobcode": code
                                                                 }
                                                             )
                                                             logger.warning(
