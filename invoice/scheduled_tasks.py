@@ -21,7 +21,7 @@ def invoice_generation_job():
     Cette fonction cree les factures automatique en fontion des RFC
     """
     print("Crontab for invoices generation started...")
-    if InvoiceConfig.cron_auro_generate_invoices or 1==1:
+    if InvoiceConfig.cron_auro_generate_invoices:
         today = py_datetime.today()
         all_invoices = Invoice.objects.filter(
             date_valid_to__date=today.date())
