@@ -163,7 +163,7 @@ class InvoiceLineItem(GenericInvoiceLineItem):
     line = GenericForeignKey('line_type', 'line_id')
 
     invoice = models.ForeignKey(Invoice, models.DO_NOTHING, db_column='InvoiceId', related_name="line_items")
-    cronjobcode = models.CharField(db_column='CronJobCode', max_length=255, default=uuid.uuid4, unique=True)
+    cron_job_code = models.CharField(db_column='CronJobCode', max_length=255, default=uuid.uuid4, unique=True)
 
     class Meta:
         managed = True
