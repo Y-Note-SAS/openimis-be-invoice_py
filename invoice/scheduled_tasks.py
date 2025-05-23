@@ -119,14 +119,11 @@ def invoice_generation_job():
                                                 if result_signal[0][1]:
                                                     family_amount = Decimal(result_signal[0][1])
                                                     logger.warning("family_amount %s ", family_amount)
-                                                insuree_numbers = ""
-                                                members = Insuree.objects.filter(
-                                                    family_id=policy.family.id,
-                                                    validity_to__isnull=True
-                                                )
-                                                for membre in members:
-                                                    insuree_numbers += str(membre.id)
-                                                code = insuree_numbers + str(today.year) + str(today.month)
+                                                if family.head_insuree:
+                                                    chf_id = family.head_insuree.chf_id
+                                                else:
+                                                    chf_id = family.id
+                                                code = (chf_id) + str(today.year) + str(today.month)
                                                 code += "-" + str(py_datetime.now())
                                                 date_due = today + datetimedelta(
                                                     months=1
