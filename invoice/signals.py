@@ -3,6 +3,7 @@ from core.service_signals import ServiceSignalBindType
 from django.contrib.contenttypes.models import ContentType
 from invoice.models import InvoiceLineItem
 from invoice.services import InvoiceService
+from .apps import InvoiceConfig
 
 
 def bind_service_signals():
@@ -28,4 +29,8 @@ def check_invoice_exist(**kwargs):
 
 
 def save_invoice_in_db(**kwargs):
-    InvoiceService.invoice_create(**kwargs)
+    if str(kwargs.get('sender')) == "<class 'calcrule_contribution_legacy.calculation_rule.ContributionPlanCalculationRuleProductModeling'>":
+        if InvoiceConfig.system_generate_invoice_on_policy:
+            InvoiceService.invoice_create(**kwargs)
+    else:
+        InvoiceService.invoice_create(**kwargs)
