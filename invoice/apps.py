@@ -51,7 +51,7 @@ DEFAULT_CONFIG = {
     # To be specified as "module_name.submodule.function_name"
     "bill_user_filter_function": None,
     "invoice_user_filter_function": None,
-    "cron_auro_generate_invoices": None,
+    "cron_auto_generate_invoices": None,
     "system_generate_invoice_on_policy": True
 }
 
@@ -99,8 +99,8 @@ class InvoiceConfig(AppConfig, ConfigUtilMixin):
 
     bill_user_filter = None
     invoice_user_filter = None
-    cron_auro_generate_invoices = None
-    system_generate_invoice_on_policy = True
+    cron_auto_generate_invoices = None
+    system_generate_invoice_on_policy = None
 
     def ready(self):
         from core.models import ModuleConfiguration
