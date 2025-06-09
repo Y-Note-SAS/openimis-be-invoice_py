@@ -88,8 +88,6 @@ def invoice_generation_job():
                                                 ok = True
                                         logger.warning("Is OK ? %s ", ok)
                                         if ok:
-                                            date_valid_to = renewal_date - timedelta(days=1)
-                                            logger.warning("current date_valid_to %s", date_valid_to)
                                             family_amount = 0
                                             government_amount = 0
                                             for calculation_rule in CALCULATION_RULES:
@@ -132,27 +130,31 @@ def invoice_generation_job():
                                                 if policy.payment_day:
                                                     date_due = date_due.replace(day=int(policy.payment_day))
                                                     logger.warning("date due updated %s", date_due)
+                                                date_to = date_due + datetimedelta(
+                                                    months=periodicity
+                                                )
+                                                date_valid_to = date_to - timedelta(days=1)
+                                                logger.warning("current date_valid_to %s", date_valid_to)
                                                 existing_invoices = Invoice.objects.filter(
                                                     subject_id=invoice.subject_id,
-                                                    date_valid_from__date__gte=date_due.date(),
-                                                    status__in=[1, 2]
+                                                    date_valid_from__date__gte=date_due.date()
                                                 )
                                                 logger.warning("existing_invoices %s", existing_invoices)
                                                 if not existing_invoices:
                                                     quantity = 1
-                                                    if policy.periodicity:
-                                                        if policy.periodicity == 'Q':
-                                                            family_amount = family_amount * 3
-                                                            quantity = 3
-                                                            government_amount = government_amount * 3
-                                                        elif policy.periodicity == 'S':
-                                                            family_amount = family_amount * 6
-                                                            quantity = 6
-                                                            government_amount = government_amount * 6
-                                                        elif policy.periodicity == 'Y':
-                                                            family_amount = family_amount * 12
-                                                            quantity = 12
-                                                            government_amount = government_amount * 12
+                                                    # if policy.periodicity:
+                                                    #     if policy.periodicity == 'Q':
+                                                    #         family_amount = family_amount * 3
+                                                    #         quantity = 3
+                                                    #         government_amount = government_amount * 3
+                                                    #     elif policy.periodicity == 'S':
+                                                    #         family_amount = family_amount * 6
+                                                    #         quantity = 6
+                                                    #         government_amount = government_amount * 6
+                                                    #     elif policy.periodicity == 'Y':
+                                                    #         family_amount = family_amount * 12
+                                                    #         quantity = 12
+                                                    #         government_amount = government_amount * 12
                                                     logger.warning("government amount %s ",
                                                                     government_amount)
                                                     logger.warning("family amount %s ", family_amount)
