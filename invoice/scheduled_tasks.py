@@ -142,19 +142,19 @@ def invoice_generation_job():
                                                 logger.warning("existing_invoices %s", existing_invoices)
                                                 if not existing_invoices:
                                                     quantity = 1
-                                                    # if policy.periodicity:
-                                                    #     if policy.periodicity == 'Q':
-                                                    #         family_amount = family_amount * 3
-                                                    #         quantity = 3
-                                                    #         government_amount = government_amount * 3
-                                                    #     elif policy.periodicity == 'S':
-                                                    #         family_amount = family_amount * 6
-                                                    #         quantity = 6
-                                                    #         government_amount = government_amount * 6
-                                                    #     elif policy.periodicity == 'Y':
-                                                    #         family_amount = family_amount * 12
-                                                    #         quantity = 12
-                                                    #         government_amount = government_amount * 12
+                                                    if policy.periodicity:
+                                                        if policy.periodicity == 'Q':
+                                                            family_amount = family_amount * 3
+                                                            quantity = 3
+                                                            government_amount = government_amount * 3
+                                                        elif policy.periodicity == 'S':
+                                                            family_amount = family_amount * 6
+                                                            quantity = 6
+                                                            government_amount = government_amount * 6
+                                                        elif policy.periodicity == 'Y':
+                                                            family_amount = family_amount * 12
+                                                            quantity = 12
+                                                            government_amount = government_amount * 12
                                                     logger.warning("government amount %s ",
                                                                     government_amount)
                                                     logger.warning("family amount %s ", family_amount)
