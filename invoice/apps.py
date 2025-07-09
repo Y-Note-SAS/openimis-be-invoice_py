@@ -106,7 +106,6 @@ class InvoiceConfig(AppConfig, ConfigUtilMixin):
         from core.models import ModuleConfiguration
         cfg = ModuleConfiguration.get_or_default(MODULE_NAME, DEFAULT_CONFIG)
         self._load_config_fields(cfg)
-        print("CONFIGS ", cfg)
         if cfg['bill_user_filter_function']:
             self._load_config_function('bill_user_filter', cfg['bill_user_filter_function'])
         if cfg['invoice_user_filter_function']:
