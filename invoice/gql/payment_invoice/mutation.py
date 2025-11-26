@@ -21,7 +21,9 @@ from invoice.models import (
     PaymentInvoiceMutation,
     DetailPaymentInvoice
 )
-
+from im_export.services import BankImportService
+from invoice.models import Invoice
+from insuree.models import Insuree
 
 class CreatePaymentInvoiceMutation(BaseHistoryModelCreateMutationMixin, BaseMutation):
     _mutation_class = "CreatePaymentInvoiceMutation"
@@ -74,6 +76,14 @@ class CreatePaymentInvoiceWithDetailMutation(BaseHistoryModelCreateMutationMixin
                 payment_invoice=payment_invoice
             )
             cls._create_payment_detail(user, data, payment_invoice, status, subject_id, subject_type)
+            
+            invoice = Invoice.objects.get(uuid=subject_id)
+            insuree = Insuree.objects.get(id=invoice.thirdparty_id)
+            chf_id = insuree.chf_id
+
+            if chf_id:
+                service = BankImportService(user.i_user)
+                service.create_premium(chf_id, payment_invoice)
 
     @classmethod
     def _get_field_for_detail(cls, data):
