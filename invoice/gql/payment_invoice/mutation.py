@@ -76,6 +76,11 @@ class CreatePaymentInvoiceWithDetailMutation(BaseHistoryModelCreateMutationMixin
                 payment_invoice=payment_invoice
             )
             cls._create_payment_detail(user, data, payment_invoice, status, subject_id, subject_type)
+            invoice = Invoice.objects.get(uuid=subject_id)
+            date_payment = data.get("date_payment")
+            if date_payment:
+                invoice.date_payed = date_payment
+                invoice.save(username=user.username)
             
             invoice = Invoice.objects.get(uuid=subject_id)
             insuree = Insuree.objects.get(id=invoice.thirdparty_id)
