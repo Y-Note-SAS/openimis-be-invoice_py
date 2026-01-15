@@ -395,7 +395,7 @@ def schedule_tasks(scheduler: BackgroundScheduler):
     """
     scheduler.add_job(
         invoice_generation_job,
-        trigger=CronTrigger(day='5,10,15,20', hour=13, minute=30),
+        trigger=CronTrigger(day='5,10,15,20', hour=12, minute=38),
         id="automatic_invoices_generation",
         max_instances=1,
         replace_existing=True,
