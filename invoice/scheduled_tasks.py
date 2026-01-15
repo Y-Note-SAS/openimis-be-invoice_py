@@ -63,10 +63,10 @@ def cron_correct_amount():
         logger.info(
             "Comparaison facture %s: Ancienne date_due: %s et Nouvelle date_due: %s",
             invoice.code,
-            invoice.date_valid_to,
+            invoice.date_valid_to.date(),
             correct_due_date
         )
-        if invoice.date_valid_to != correct_due_date:
+        if invoice.date_valid_to.date() != correct_due_date:
             logger.info("Mise a jour")
             # Mettre à jour la date_due
             # Garder l'heure/minute/seconde d'origine, changer seulement la date
@@ -81,6 +81,8 @@ def cron_correct_amount():
             invoice.date_valid_to = new_datetime
             # invoice.save(update_fields=['date_to'])
             corrected_count += 1
+        else:
+            print("Pas de mise a jour...")
 
     logger.info("Correction terminée. %s factures corrigées.", corrected_count)
 
