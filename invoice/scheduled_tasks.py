@@ -366,6 +366,7 @@ def create_invoice(code, due_date, valid_from, valid_to, amount,
             "thirdparty_type": "insuree"
         }
 
+        logger.info("invoice_values %s", invoice_values)
         # invoice_result = invoice_service.create(invoice_values)
 
         if invoice_result.get("success"):
