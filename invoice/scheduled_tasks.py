@@ -19,7 +19,7 @@ from invoice.apps import InvoiceConfig
 
 logger = logging.getLogger(__name__)
 
-def cron_correct_amount():
+def cron_correct_date_due():
     """
     Corrige les date_due erronées pour toutes les factures existantes.
     Règle : date_due doit être le payment_day du mois approprié
@@ -283,7 +283,7 @@ def skipped_invoice_generation_script():
         chf_id = family.head_insuree.chf_id if family.head_insuree else str(family.id)
 
         # Date de base pour les calculs
-        base_due_date = calculate_due_date(today.date(), payment_day)
+        base_due_date = calculate_due_date(invoice.date_valid_to.date(), payment_day)
         base_valid_to = base_due_date + relativedelta(months=periodicity) - timedelta(days=1)
 
         # Vérifier si des factures existent déjà pour ces dates
