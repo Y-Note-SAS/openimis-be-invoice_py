@@ -22,6 +22,7 @@ def cron_correct_amount():
     Corrige les date_due erronées pour toutes les factures existantes.
     Règle : date_due doit être le payment_day du mois approprié
     """
+    print(InvoiceConfig.cron_auto_generate_invoices)
     logger.info("Début de la correction des dates dues des factures...")
 
     all_invoices = Invoice.objects.filter(is_deleted=False)
@@ -120,7 +121,9 @@ def invoice_generation_job():
     """
     Cette fonction cree les factures automatique en fontion des RFC
     """
-    print("Crontab for invoices generation started...")
+    print("Crontab for invoices generation started...",
+          InvoiceConfig.cron_auto_generate_invoices
+        )
     if InvoiceConfig.cron_auto_generate_invoices:
         today = py_datetime.today()
         all_invoices = Invoice.objects.filter(
@@ -130,7 +133,8 @@ def invoice_generation_job():
             print("invoice code ", invoice.code)
             logger.warning("subject_id %s ", invoice.subject_id)
             if not invoice.subject_id:
-                logger.warning("No insuree found for invoice %s ", invoice.code)
+                logger.warning(
+                    "No insuree found for invoice %s ", invoice.code)
             if invoice.subject_id:
                 family = Family.objects.filter(
                     validity_to__isnull=True,
