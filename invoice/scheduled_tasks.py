@@ -59,30 +59,59 @@ def cron_correct_amount():
             day = payment_day
         correct_due_date = py_date(year, month, day)
 
-        # Comparer avec la date_due actuelle
-        logger.info(
-            "Comparaison facture %s: Ancienne date_due: %s et Nouvelle date_due: %s",
-            invoice.code,
-            invoice.date_valid_to.date(),
-            correct_due_date
-        )
-        if invoice.date_valid_to.date() != correct_due_date:
-            logger.info("Mise a jour")
-            # Mettre à jour la date_due
-            # Garder l'heure/minute/seconde d'origine, changer seulement la date
-            old_datetime = invoice.date_valid_to
-            new_datetime = py_datetime.combine(
-                correct_due_date,
-                old_datetime.time(),
-                tzinfo=old_datetime.tzinfo
-            )
-            logger.info("new_datetime %s", new_datetime)
+        # Tout ce block c'est juste pour récupérer la périodicité afin de
+        # recalculer la date_to
+        if invoice.subject_id:
+            family = Family.objects.filter(
+                validity_to__isnull=True,
+                head_insuree=invoice.subject_id).first()
+            if family:
+                insureepolicy = InsureePolicy.objects.filter(
+                    validity_to__isnull=True,
+                    insuree_id=invoice.subject_id).first()
+                if insureepolicy:
+                    policy_id = insureepolicy.policy_id
+                    if policy_id:
+                        policy = Policy.objects.filter(id=policy_id).first()
+                        if policy:
+                            periodicity = 12
+                            if policy.periodicity:
+                                if policy.periodicity == 'Q':
+                                    periodicity = 3
+                                elif policy.periodicity == 'S':
+                                    periodicity = 6
+                                elif policy.periodicity == 'M':
+                                    periodicity = 1
+                            # Périodicité retrouvée
+                            logger.info("periodicity %s", periodicity)
+                            new_date_to = correct_due_date + datetimedelta(
+                                months=periodicity
+                            )
+                            # Comparer avec la date_due actuelle
+                            logger.info(
+                                "Comparaison facture %s: Ancienne date_due: %s et Nouvelle date_due: %s",
+                                invoice.code,
+                                invoice.date_valid_to.date(),
+                                correct_due_date
+                            )
+                            if invoice.date_valid_to.date() != new_date_to:
+                                logger.info("Mise a jour*")
+                                # Mettre à jour la date_due
+                                # Garder l'heure/minute/seconde d'origine,
+                                # changer seulement la date
+                                old_datetime = invoice.date_valid_to
+                                new_datetime = py_datetime.combine(
+                                    new_date_to,
+                                    old_datetime.time(),
+                                    tzinfo=old_datetime.tzinfo
+                                )
+                                logger.info("new_datetime %s", new_datetime)
 
-            invoice.date_valid_to = new_datetime
-            # invoice.save(update_fields=['date_to'])
-            corrected_count += 1
-        else:
-            print("Pas de mise a jour...")
+                                invoice.date_valid_to = new_datetime
+                                # invoice.save(update_fields=['date_to'])
+                                corrected_count += 1
+                            else:
+                                print("Pas de mise a jour...")
 
     logger.info("Correction terminée. %s factures corrigées.", corrected_count)
 
