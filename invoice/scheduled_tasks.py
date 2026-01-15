@@ -2,7 +2,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from policy.models import Policy
 from invoice.models import Invoice
-from datetime import timedelta, datetime as py_datetime
+from datetime import timedelta, datetime as py_datetime, date as py_date
+import calendar
 from insuree.models import InsureePolicy, Family, Insuree
 from policy.models import Policy
 import logging
@@ -15,6 +16,73 @@ from invoice.services.invoiceLineItem import InvoiceLineItemService
 from invoice.apps import InvoiceConfig
 
 logger = logging.getLogger(__name__)
+
+def cron_correct_amount():
+    """
+    Corrige les date_due erronées pour toutes les factures existantes.
+    Règle : date_due doit être le payment_day du mois approprié
+    """
+    logger.info("Début de la correction des dates dues des factures...")
+
+    all_invoices = Invoice.objects.filter(is_deleted=False)
+    corrected_count = 0
+
+    for invoice in all_invoices:
+        # Récupérer les informations
+        creation_date = invoice.date_created  # Date de création de la facture
+        print("type ", type(creation_date))
+        print("type invoice.date_valid_to ", type(invoice.date_valid_to))
+        payment_day = invoice.date_valid_to.day     # Le jour de paiement
+
+        # Calculer la date_due correcte
+        if payment_day < creation_date.day:
+            # Mois suivant
+            if creation_date.month == 12:
+                year = creation_date.year + 1
+                month = 1
+            else:
+                year = creation_date.year
+                month = creation_date.month + 1
+        else:
+            # Mois courant
+            year = creation_date.year
+            month = creation_date.month
+
+        # Vérifier si le jour existe dans ce mois
+        days_in_month = calendar.monthrange(year, month)[1]
+
+        if payment_day > days_in_month:
+            # Le jour n'existe pas dans ce mois
+            # prendre le dernier jour du mois
+            day = days_in_month
+        else:
+            day = payment_day
+        correct_due_date = py_date(year, month, day)
+
+        # Comparer avec la date_due actuelle
+        if invoice.date_to.date() != correct_due_date:
+            logger.info(
+                "Correction facture %s: Ancienne date_due: %s Nouvelle date_due: %s",
+                invoice.code,
+                invoice.date_to.date(),
+                correct_due_date
+            )
+
+            # Mettre à jour la date_due
+            # Garder l'heure/minute/seconde d'origine, changer seulement la date
+            old_datetime = invoice.date_to
+            new_datetime = py_datetime.combine(
+                correct_due_date,
+                old_datetime.time(),
+                tzinfo=old_datetime.tzinfo
+            )
+
+            invoice.date_to = new_datetime
+            # invoice.save(update_fields=['date_to'])
+            corrected_count += 1
+
+    logger.info("Correction terminée. %s factures corrigées.", corrected_count)
+
 
 def invoice_generation_job():
     """
@@ -123,9 +191,33 @@ def invoice_generation_job():
                                                     chf_id = family.id
                                                 code = (chf_id) + str(today.year) + str(today.month)
                                                 code += "-" + str(py_datetime.now())
-                                                date_due = today + datetimedelta(
-                                                    months=1
-                                                )
+                                                payment_day = 5 #5 par défaut
+                                                if policy.payment_day:
+                                                    payment_day = int(policy.payment_day)
+                                                # Déterminer l'année et le mois
+                                                if payment_day < today.day:
+                                                    # Mois suivant
+                                                    if today.month == 12:
+                                                        year = today.year + 1
+                                                        month = 1
+                                                    else:
+                                                        year = today.year
+                                                        month = today.month + 1
+                                                else:
+                                                    # Mois courant
+                                                    year = today.year
+                                                    month = today.month
+
+                                                # Vérifier si le jour existe dans ce mois
+                                                days_in_month = calendar.monthrange(year, month)[1]
+
+                                                if payment_day > days_in_month:
+                                                    # Le jour n'existe pas dans ce mois
+                                                    # prendre le dernier jour du mois
+                                                    day = days_in_month
+                                                else:
+                                                    day = payment_day
+                                                date_due = py_date(year, month, day)
                                                 logger.warning("date due %s", date_due)
                                                 if policy.payment_day:
                                                     date_due = date_due.replace(day=int(policy.payment_day))
