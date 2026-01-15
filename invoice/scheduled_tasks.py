@@ -87,12 +87,12 @@ def cron_correct_amount():
                             new_date_to = correct_due_date + datetimedelta(
                                 months=periodicity
                             )
-                            # Comparer avec la date_due actuelle
+                            # Comparer avec la date To actuelle
                             logger.info(
-                                "Comparaison facture %s: Ancienne date_due: %s et Nouvelle date_due: %s",
+                                "Comparaison facture %s: Ancienne dateto: %s et Nouvelle dateto: %s",
                                 invoice.code,
                                 invoice.date_valid_to.date(),
-                                correct_due_date
+                                new_date_to
                             )
                             if invoice.date_valid_to.date() != new_date_to:
                                 logger.info("Mise a jour*")
