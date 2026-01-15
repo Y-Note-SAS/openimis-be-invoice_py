@@ -390,9 +390,12 @@ def invoice_generation_job():
     return True
 
 def schedule_tasks(scheduler: BackgroundScheduler):
+    """
+    This is the function to attach job to the system
+    """
     scheduler.add_job(
         invoice_generation_job,
-        trigger=CronTrigger(day='5,10,15,20', hour=3, minute=0),
+        trigger=CronTrigger(day='5,10,15,20', hour=13, minute=18),
         id="automatic_invoices_generation",
         max_instances=1,
         replace_existing=True,
