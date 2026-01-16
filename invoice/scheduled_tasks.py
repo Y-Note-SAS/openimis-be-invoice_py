@@ -25,6 +25,7 @@ def cron_correct_date_due():
     Règle : date_due doit être le payment_day du mois approprié
     """
     logger.info("Début de la correction des dates dues des factures...")
+    print("Début de la correction des dates dues des factures...")
 
     all_invoices = Invoice.objects.filter(is_deleted=False)
     corrected_count = 0
@@ -94,6 +95,12 @@ def cron_correct_date_due():
                                 invoice.date_valid_to.date(),
                                 new_date_to
                             )
+                            print(
+                                "Comparaison facture %s: Ancienne dateto: %s et Nouvelle dateto: %s",
+                                invoice.code,
+                                invoice.date_valid_to.date(),
+                                new_date_to
+                            )
                             if invoice.date_valid_to.date() != new_date_to:
                                 logger.info("Mise a jour*")
                                 # Mettre à jour la date_due
@@ -106,9 +113,10 @@ def cron_correct_date_due():
                                     tzinfo=old_datetime.tzinfo
                                 )
                                 logger.info("new_datetime %s", new_datetime)
+                                print("new_datetime %s", new_datetime)
 
                                 invoice.date_valid_to = new_datetime
-                                # invoice.save(update_fields=['date_to'])
+                                invoice.save(update_fields=['date_to'])
                                 corrected_count += 1
                             else:
                                 print("Pas de mise a jour...")
@@ -133,23 +141,56 @@ def calculate_missing_months(last_invoice_date: py_date, periodicity: int, today
     return missing_periods
 
 
-def calculate_due_date(today: py_date, payment_day: int) -> py_date:
+def calculate_due_date(today: py_date, payment_day: int, period: int) -> py_date:
     """
-    Calcule la prochaine date d'échéance.
+    Calcule la prochaine date d'échéance en tenant compte de la période.
+    
+    Args:
+        today: Date actuelle
+        payment_day: Jour de paiement souhaité (1-31)
+        period: Période en mois
+        (1=mensuel, 3=trimestriel, 6=semestriel, 12=annuel)
+    
+    Returns:
+        Prochaine date d'échéance
     """
-    # Déterminer le mois approprié
-    if payment_day < today.day:
-        # Mois suivant
-        if today.month == 12:
-            year = today.year + 1
-            month = 1
-        else:
-            year = today.year
-            month = today.month + 1
+    # Si la période est > 1 mois, on ne compare pas avec today.day
+    if period > 1:
+        # Pour les périodes > 1 mois, on prend toujours le payment_day
+        # du mois approprié selon la période
+
+        # Calculer depuis une date de référence (première échéance)
+        # Ici on suppose qu'on part de today, mais vous pourriez avoir
+        # une date de début
+        reference_date = today.replace(day=1) # Premier du mois comme référence
+
+        # Trouver le prochain multiple de la période
+        months_from_reference = 0
+        temp_date = reference_date
+
+        while temp_date <= today:
+            temp_date = reference_date + relativedelta(
+                months=months_from_reference)
+            months_from_reference += period
+
+        # Maintenant temp_date est la prochaine date de période
+        year = temp_date.year
+        month = temp_date.month
+
     else:
-        # Mois courant
-        year = today.year
-        month = today.month
+        # Période mensuelle (logique originale)
+        if payment_day < today.day:
+            # Mois suivant
+            if today.month == 12:
+                year = today.year + 1
+                month = 1
+            else:
+                year = today.year
+                month = today.month + 1
+        else:
+            # Mois courant
+            year = today.year
+            month = today.month
 
     # Ajuster le jour si nécessaire
     days_in_month = calendar.monthrange(year, month)[1]
@@ -164,6 +205,7 @@ def skipped_invoice_generation_script():
     """
     today = py_datetime.today()
     logger.info("Début de la génération des factures manquées. Date: %s", today)
+    print("Début de la génération des factures manquées. Date: %s", today)
 
     # Filtrer seulement les factures expirées
     expired_invoices = Invoice.objects.filter(
@@ -172,6 +214,7 @@ def skipped_invoice_generation_script():
     )
 
     logger.warning("Factures expirées trouvées: %s", len(expired_invoices))
+    print("Factures expirées trouvées: %s", len(expired_invoices))
 
     for invoice in expired_invoices:
         logger.info("Traitement facture: %s", invoice.code)
@@ -229,12 +272,15 @@ def skipped_invoice_generation_script():
             periodicity,
             today.date()
         )
+        print("**** %s nn %s nn %s", invoice.date_valid_to.date(), periodicity, today.date())
 
         if missing_periods == 0:
             logger.info("Aucune période manquée pour %s", invoice.code)
+            print("Aucune période manquée pour %s", invoice.code)
             continue
 
         logger.info("Périodes manquées pour %s: %s", invoice.code, missing_periods)
+        print("Périodes manquées pour %s: %s", invoice.code, missing_periods)
 
         # Récupérer le jour de paiement
         payment_day = int(policy.payment_day) if policy.payment_day else 5
@@ -283,7 +329,8 @@ def skipped_invoice_generation_script():
         chf_id = family.head_insuree.chf_id if family.head_insuree else str(family.id)
 
         # Date de base pour les calculs
-        base_due_date = calculate_due_date(invoice.date_valid_to.date(), payment_day)
+        base_due_date = calculate_due_date(
+            invoice.date_valid_to.date(), payment_day, periodicity)
         base_valid_to = base_due_date + relativedelta(months=periodicity) - timedelta(days=1)
 
         # Vérifier si des factures existent déjà pour ces dates
@@ -367,6 +414,7 @@ def create_invoice(code, due_date, valid_from, valid_to, amount,
         }
 
         logger.info("invoice_values %s", invoice_values)
+        print("invoice_values %s", invoice_values)
         # invoice_result = invoice_service.create(invoice_values)
 
         if invoice_result.get("success"):
@@ -508,30 +556,8 @@ def invoice_generation_job():
                                                 payment_day = 5 #5 par défaut
                                                 if policy.payment_day:
                                                     payment_day = int(policy.payment_day)
-                                                # Déterminer l'année et le mois
-                                                if payment_day < today.day:
-                                                    # Mois suivant
-                                                    if today.month == 12:
-                                                        year = today.year + 1
-                                                        month = 1
-                                                    else:
-                                                        year = today.year
-                                                        month = today.month + 1
-                                                else:
-                                                    # Mois courant
-                                                    year = today.year
-                                                    month = today.month
-
-                                                # Vérifier si le jour existe dans ce mois
-                                                days_in_month = calendar.monthrange(year, month)[1]
-
-                                                if payment_day > days_in_month:
-                                                    # Le jour n'existe pas dans ce mois
-                                                    # prendre le dernier jour du mois
-                                                    day = days_in_month
-                                                else:
-                                                    day = payment_day
-                                                date_due = py_date(year, month, day)
+                                                date_due = calculate_due_date(
+                                                    today.date(), payment_day, periodicity)
                                                 logger.warning("date due %s", date_due)
                                                 if policy.payment_day:
                                                     date_due = date_due.replace(day=int(policy.payment_day))
