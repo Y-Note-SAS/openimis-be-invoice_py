@@ -415,7 +415,7 @@ def create_invoice(code, due_date, valid_from, valid_to, amount,
 
         logger.info("invoice_values %s", invoice_values)
         print("invoice_values %s", invoice_values)
-        # invoice_result = invoice_service.create(invoice_values)
+        invoice_result = invoice_service.create(invoice_values)
 
         if invoice_result.get("success"):
             # Créer la ligne de facture
