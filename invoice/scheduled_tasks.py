@@ -108,7 +108,7 @@ def cron_correct_date_due():
                                 logger.info("new_datetime %s", new_datetime)
 
                                 invoice.date_valid_to = new_datetime
-                                # invoice.save(update_fields=['date_to'])
+                                invoice.save(username="Admin", update_fields=['date_valid_to'])
                                 corrected_count += 1
                             else:
                                 print("Pas de mise a jour...")
@@ -133,25 +133,58 @@ def calculate_missing_months(last_invoice_date: py_date, periodicity: int, today
     return missing_periods
 
 
-def calculate_due_date(today: py_date, payment_day: int) -> py_date:
+def calculate_due_date(today: py_date, payment_day: int, period: int) -> py_date:
     """
-    Calcule la prochaine date d'échéance.
+    Calcule la prochaine date d'échéance en tenant compte de la période.
+    
+    Args:
+        today: Date actuelle
+        payment_day: Jour de paiement souhaité (1-31)
+        period: Période en mois
+        (1=mensuel, 3=trimestriel, 6=semestriel, 12=annuel)
+    
+    Returns:
+        Prochaine date d'échéance
     """
-    # Déterminer le mois approprié
-    if payment_day < today.day:
-        # Mois suivant
-        if today.month == 12:
-            year = today.year + 1
-            month = 1
-        else:
-            year = today.year
-            month = today.month + 1
-    else:
-        # Mois courant
-        year = today.year
-        month = today.month
+    # Si la période est > 1 mois, on ne compare pas avec today.day
+    # if period > 1:
+    # Pour les périodes > 1 mois, on prend toujours le payment_day
+    # du mois approprié selon la période
 
-    # Ajuster le jour si nécessaire
+    # Calculer depuis une date de référence (première échéance)
+    # Ici on suppose qu'on part de today, mais vous pourriez avoir
+    # une date de début
+    reference_date = today.replace(day=1) # Premier du mois comme référence
+
+    # Trouver le prochain multiple de la période
+    months_from_reference = 0
+    temp_date = reference_date
+
+    while temp_date <= today:
+        temp_date = reference_date + relativedelta(
+            months=months_from_reference)
+        months_from_reference += period
+
+    # Maintenant temp_date est la prochaine date de période
+    year = temp_date.year
+    month = temp_date.month
+
+    # else:
+    #     # Période mensuelle (logique originale)
+    #     if payment_day < today.day:
+    #         # Mois suivant
+    #         if today.month == 12:
+    #             year = today.year + 1
+    #             month = 1
+    #         else:
+    #             year = today.year
+    #             month = today.month + 1
+    #     else:
+    #         # Mois courant
+    #         year = today.year
+    #         month = today.month
+
+    # # Ajuster le jour si nécessaire
     days_in_month = calendar.monthrange(year, month)[1]
     day = min(payment_day, days_in_month)
 
@@ -234,10 +267,13 @@ def skipped_invoice_generation_script():
             logger.info("Aucune période manquée pour %s", invoice.code)
             continue
 
-        logger.info("Périodes manquées pour %s: %s", invoice.code, missing_periods)
-
         # Récupérer le jour de paiement
         payment_day = int(policy.payment_day) if policy.payment_day else 5
+
+        # en Janvier il faut préparer la derniere facture si nous avons deja depassé le jour
+        if periodicity == 1 and payment_day < today.date().day:
+            missing_periods += 1
+        logger.info("Périodes manquées pour %s: %s", invoice.code, missing_periods)
 
         # Calculer les montants
         admin_user = InteractiveUser.objects.filter(id=1).first()
@@ -283,8 +319,12 @@ def skipped_invoice_generation_script():
         chf_id = family.head_insuree.chf_id if family.head_insuree else str(family.id)
 
         # Date de base pour les calculs
-        base_due_date = calculate_due_date(invoice.date_valid_to.date(), payment_day)
-        base_valid_to = base_due_date + relativedelta(months=periodicity) - timedelta(days=1)
+        base_due_date1 = calculate_due_date(
+            invoice.date_valid_from.date(), payment_day, periodicity)
+        base_due_date = calculate_due_date(
+            invoice.date_valid_to.date(), payment_day, periodicity)
+        # base_valid_to = base_due_date + relativedelta(months=periodicity) - timedelta(days=1)
+        base_valid_to = base_due_date1 + relativedelta(months=periodicity) - timedelta(days=1)
 
         # Vérifier si des factures existent déjà pour ces dates
         existing_invoices = Invoice.objects.filter(
@@ -299,7 +339,8 @@ def skipped_invoice_generation_script():
         # Créer les factures manquées
         for i in range(missing_periods):
             # Calculer les dates pour cette période
-            period_due_date = base_due_date + relativedelta(months=periodicity * i)
+            # period_due_date = base_due_date + relativedelta(months=periodicity * i)
+            period_due_date = base_due_date1 + relativedelta(months=periodicity * i)
             period_valid_from = period_due_date
             period_valid_to = base_valid_to + relativedelta(months=periodicity * i)
 
@@ -367,7 +408,7 @@ def create_invoice(code, due_date, valid_from, valid_to, amount,
         }
 
         logger.info("invoice_values %s", invoice_values)
-        # invoice_result = invoice_service.create(invoice_values)
+        invoice_result = invoice_service.create(invoice_values)
 
         if invoice_result.get("success"):
             # Créer la ligne de facture
@@ -508,7 +549,8 @@ def invoice_generation_job():
                                                 payment_day = 5 #5 par défaut
                                                 if policy.payment_day:
                                                     payment_day = int(policy.payment_day)
-                                                # Déterminer l'année et le mois
+                                                # Calcul de la Date Due dans le cron
+                                                # (Meme logique appliquée dans le module polcy qui fonctionne)
                                                 if payment_day < today.day:
                                                     # Mois suivant
                                                     if today.month == 12:
@@ -521,16 +563,9 @@ def invoice_generation_job():
                                                     # Mois courant
                                                     year = today.year
                                                     month = today.month
-
-                                                # Vérifier si le jour existe dans ce mois
+                                                # Ajuster le jour si nécessaire
                                                 days_in_month = calendar.monthrange(year, month)[1]
-
-                                                if payment_day > days_in_month:
-                                                    # Le jour n'existe pas dans ce mois
-                                                    # prendre le dernier jour du mois
-                                                    day = days_in_month
-                                                else:
-                                                    day = payment_day
+                                                day = min(payment_day, days_in_month)
                                                 date_due = py_date(year, month, day)
                                                 logger.warning("date due %s", date_due)
                                                 if policy.payment_day:
@@ -673,8 +708,7 @@ def schedule_tasks(scheduler: BackgroundScheduler):
     """
     scheduler.add_job(
         invoice_generation_job,
-        # trigger=CronTrigger(day='4,9,14,19', hour=3, minute=0),
-        trigger=CronTrigger(day='25,26', hour=3, minute=0),
+        trigger=CronTrigger(day='4,9,14,19', hour=3, minute=0),
         id="automatic_invoices_generation",
         max_instances=1,
         replace_existing=True,
