@@ -563,8 +563,24 @@ def invoice_generation_job():
                                                 payment_day = 5 #5 par défaut
                                                 if policy.payment_day:
                                                     payment_day = int(policy.payment_day)
-                                                date_due = calculate_due_date(
-                                                    today.date(), payment_day, periodicity)
+                                                # Calcul de la Date Due dans le cron
+                                                # (Meme logique appliquée dans le module polcy qui fonctionne)
+                                                if payment_day < today.day:
+                                                    # Mois suivant
+                                                    if today.month == 12:
+                                                        year = today.year + 1
+                                                        month = 1
+                                                    else:
+                                                        year = today.year
+                                                        month = today.month + 1
+                                                else:
+                                                    # Mois courant
+                                                    year = today.year
+                                                    month = today.month
+                                                # Ajuster le jour si nécessaire
+                                                days_in_month = calendar.monthrange(year, month)[1]
+                                                day = min(payment_day, days_in_month)
+                                                date_due = py_date(year, month, day)
                                                 logger.warning("date due %s", date_due)
                                                 if policy.payment_day:
                                                     date_due = date_due.replace(day=int(policy.payment_day))
@@ -706,8 +722,7 @@ def schedule_tasks(scheduler: BackgroundScheduler):
     """
     scheduler.add_job(
         invoice_generation_job,
-        # trigger=CronTrigger(day='4,9,14,19', hour=3, minute=0),
-        trigger=CronTrigger(day='25,26', hour=3, minute=0),
+        trigger=CronTrigger(day='4,9,14,19', hour=3, minute=0),
         id="automatic_invoices_generation",
         max_instances=1,
         replace_existing=True,
