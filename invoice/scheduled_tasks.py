@@ -223,6 +223,8 @@ def skipped_invoice_generation_script():
             logger.warning(
                 "Famille non trouvée pour subject_id: %s", invoice.subject_id)
             continue
+        if not family:
+            continue
 
         try:
             insuree_policy = InsureePolicy.objects.filter(
@@ -233,9 +235,13 @@ def skipped_invoice_generation_script():
             logger.warning("Police d'assuré non trouvée pour: %s", invoice.subject_id)
             continue
 
+        if not insuree_policy:
+            continue
         policy = Policy.objects.filter(id=insuree_policy.policy_id).first()
         if not policy:
             logger.warning("Police non trouvée: %s", insuree_policy.policy_id)
+            continue
+        if not policy:
             continue
 
         contribution = policy.contribution_plan
