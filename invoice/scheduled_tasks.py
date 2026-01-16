@@ -155,44 +155,44 @@ def calculate_due_date(today: py_date, payment_day: int, period: int) -> py_date
         Prochaine date d'échéance
     """
     # Si la période est > 1 mois, on ne compare pas avec today.day
-    if period > 1:
-        # Pour les périodes > 1 mois, on prend toujours le payment_day
-        # du mois approprié selon la période
+    # if period > 1:
+    # Pour les périodes > 1 mois, on prend toujours le payment_day
+    # du mois approprié selon la période
 
-        # Calculer depuis une date de référence (première échéance)
-        # Ici on suppose qu'on part de today, mais vous pourriez avoir
-        # une date de début
-        reference_date = today.replace(day=1) # Premier du mois comme référence
+    # Calculer depuis une date de référence (première échéance)
+    # Ici on suppose qu'on part de today, mais vous pourriez avoir
+    # une date de début
+    reference_date = today.replace(day=1) # Premier du mois comme référence
 
-        # Trouver le prochain multiple de la période
-        months_from_reference = 0
-        temp_date = reference_date
+    # Trouver le prochain multiple de la période
+    months_from_reference = 0
+    temp_date = reference_date
 
-        while temp_date <= today:
-            temp_date = reference_date + relativedelta(
-                months=months_from_reference)
-            months_from_reference += period
+    while temp_date <= today:
+        temp_date = reference_date + relativedelta(
+            months=months_from_reference)
+        months_from_reference += period
 
-        # Maintenant temp_date est la prochaine date de période
-        year = temp_date.year
-        month = temp_date.month
+    # Maintenant temp_date est la prochaine date de période
+    year = temp_date.year
+    month = temp_date.month
 
-    else:
-        # Période mensuelle (logique originale)
-        if payment_day < today.day:
-            # Mois suivant
-            if today.month == 12:
-                year = today.year + 1
-                month = 1
-            else:
-                year = today.year
-                month = today.month + 1
-        else:
-            # Mois courant
-            year = today.year
-            month = today.month
+    # else:
+    #     # Période mensuelle (logique originale)
+    #     if payment_day < today.day:
+    #         # Mois suivant
+    #         if today.month == 12:
+    #             year = today.year + 1
+    #             month = 1
+    #         else:
+    #             year = today.year
+    #             month = today.month + 1
+    #     else:
+    #         # Mois courant
+    #         year = today.year
+    #         month = today.month
 
-    # Ajuster le jour si nécessaire
+    # # Ajuster le jour si nécessaire
     days_in_month = calendar.monthrange(year, month)[1]
     day = min(payment_day, days_in_month)
 
@@ -283,7 +283,7 @@ def skipped_invoice_generation_script():
         payment_day = int(policy.payment_day) if policy.payment_day else 5
 
         # en Janvier il faut préparer la derniere facture si nous avons deja depassé le jour
-        if payment_day < today.date().day:
+        if periodicity == 1 and payment_day < today.date().day:
             missing_periods += 1
         logger.info("Périodes manquées pour %s: %s", invoice.code, missing_periods)
         print("Périodes manquées pour %s: %s", invoice.code, missing_periods)
@@ -332,9 +332,12 @@ def skipped_invoice_generation_script():
         chf_id = family.head_insuree.chf_id if family.head_insuree else str(family.id)
 
         # Date de base pour les calculs
+        base_due_date1 = calculate_due_date(
+            invoice.date_valid_from.date(), payment_day, periodicity)
         base_due_date = calculate_due_date(
             invoice.date_valid_to.date(), payment_day, periodicity)
-        base_valid_to = base_due_date + relativedelta(months=periodicity) - timedelta(days=1)
+        # base_valid_to = base_due_date + relativedelta(months=periodicity) - timedelta(days=1)
+        base_valid_to = base_due_date1 + relativedelta(months=periodicity) - timedelta(days=1)
 
         # Vérifier si des factures existent déjà pour ces dates
         existing_invoices = Invoice.objects.filter(
@@ -349,7 +352,8 @@ def skipped_invoice_generation_script():
         # Créer les factures manquées
         for i in range(missing_periods):
             # Calculer les dates pour cette période
-            period_due_date = base_due_date + relativedelta(months=periodicity * i)
+            # period_due_date = base_due_date + relativedelta(months=periodicity * i)
+            period_due_date = base_due_date1 + relativedelta(months=periodicity * i)
             period_valid_from = period_due_date
             period_valid_to = base_valid_to + relativedelta(months=periodicity * i)
 
@@ -418,7 +422,7 @@ def create_invoice(code, due_date, valid_from, valid_to, amount,
 
         logger.info("invoice_values %s", invoice_values)
         print("invoice_values %s", invoice_values)
-        # invoice_result = invoice_service.create(invoice_values)
+        invoice_result = invoice_service.create(invoice_values)
 
         if invoice_result.get("success"):
             # Créer la ligne de facture
