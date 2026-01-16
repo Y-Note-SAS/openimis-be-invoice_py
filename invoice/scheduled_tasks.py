@@ -116,7 +116,7 @@ def cron_correct_date_due():
                                 print("new_datetime %s", new_datetime)
 
                                 invoice.date_valid_to = new_datetime
-                                invoice.save(update_fields=['date_to'])
+                                invoice.save()
                                 corrected_count += 1
                             else:
                                 print("Pas de mise a jour...")
