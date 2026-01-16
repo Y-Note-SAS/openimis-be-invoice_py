@@ -215,20 +215,20 @@ def skipped_invoice_generation_script():
 
         # Vérifier la famille et la police
         try:
-            family = Family.objects.get(
+            family = Family.objects.filter(
                 validity_to__isnull=True,
                 head_insuree=invoice.subject_id
-            )
+            ).first()
         except Family.DoesNotExist:
             logger.warning(
                 "Famille non trouvée pour subject_id: %s", invoice.subject_id)
             continue
 
         try:
-            insuree_policy = InsureePolicy.objects.get(
+            insuree_policy = InsureePolicy.objects.filter(
                 validity_to__isnull=True,
                 insuree_id=invoice.subject_id
-            )
+            ).first()
         except InsureePolicy.DoesNotExist:
             logger.warning("Police d'assuré non trouvée pour: %s", invoice.subject_id)
             continue
@@ -443,6 +443,7 @@ def invoice_generation_job():
     """
     Cette fonction cree les factures automatique en fontion des RFC
     """
+    logger.info("Crontab for invoices generation started...")
     if InvoiceConfig.cron_auto_generate_invoices:
         today = py_datetime.today()
         all_invoices = Invoice.objects.filter(
