@@ -25,7 +25,6 @@ def cron_correct_date_due():
     Règle : date_due doit être le payment_day du mois approprié
     """
     logger.info("Début de la correction des dates dues des factures...")
-    print("Début de la correction des dates dues des factures...")
 
     all_invoices = Invoice.objects.filter(is_deleted=False)
     corrected_count = 0
@@ -95,12 +94,6 @@ def cron_correct_date_due():
                                 invoice.date_valid_to.date(),
                                 new_date_to
                             )
-                            print(
-                                "Comparaison facture %s: Ancienne dateto: %s et Nouvelle dateto: %s",
-                                invoice.code,
-                                invoice.date_valid_to.date(),
-                                new_date_to
-                            )
                             if invoice.date_valid_to.date() != new_date_to:
                                 logger.info("Mise a jour*")
                                 # Mettre à jour la date_due
@@ -113,7 +106,6 @@ def cron_correct_date_due():
                                     tzinfo=old_datetime.tzinfo
                                 )
                                 logger.info("new_datetime %s", new_datetime)
-                                print("new_datetime %s", new_datetime)
 
                                 invoice.date_valid_to = new_datetime
                                 invoice.save(username="Admin", update_fields=['date_valid_to'])
@@ -205,7 +197,6 @@ def skipped_invoice_generation_script():
     """
     today = py_datetime.today()
     logger.info("Début de la génération des factures manquées. Date: %s", today)
-    print("Début de la génération des factures manquées. Date:* %s", today)
 
     # Filtrer seulement les factures expirées
     expired_invoices = Invoice.objects.filter(
@@ -214,7 +205,6 @@ def skipped_invoice_generation_script():
     )
 
     logger.warning("Factures expirées trouvées: %s", len(expired_invoices))
-    print("Factures expirées trouvées: %s", len(expired_invoices))
 
     for invoice in expired_invoices:
         logger.info("Traitement facture: %s", invoice.code)
@@ -272,11 +262,9 @@ def skipped_invoice_generation_script():
             periodicity,
             today.date()
         )
-        print("**** %s nn %s nn %s", invoice.date_valid_to.date(), periodicity, today.date())
 
         if missing_periods == 0:
             logger.info("Aucune période manquée pour %s", invoice.code)
-            print("Aucune période manquée pour %s", invoice.code)
             continue
 
         # Récupérer le jour de paiement
@@ -286,7 +274,6 @@ def skipped_invoice_generation_script():
         if periodicity == 1 and payment_day < today.date().day:
             missing_periods += 1
         logger.info("Périodes manquées pour %s: %s", invoice.code, missing_periods)
-        print("Périodes manquées pour %s: %s", invoice.code, missing_periods)
 
         # Calculer les montants
         admin_user = InteractiveUser.objects.filter(id=1).first()
@@ -421,7 +408,6 @@ def create_invoice(code, due_date, valid_from, valid_to, amount,
         }
 
         logger.info("invoice_values %s", invoice_values)
-        print("invoice_values %s", invoice_values)
         invoice_result = invoice_service.create(invoice_values)
 
         if invoice_result.get("success"):
