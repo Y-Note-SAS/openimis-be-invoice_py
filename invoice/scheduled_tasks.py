@@ -205,7 +205,7 @@ def skipped_invoice_generation_script():
     """
     today = py_datetime.today()
     logger.info("Début de la génération des factures manquées. Date: %s", today)
-    print("Début de la génération des factures manquées. Date: %s", today)
+    print("Début de la génération des factures manquées. Date:* %s", today)
 
     # Filtrer seulement les factures expirées
     expired_invoices = Invoice.objects.filter(
@@ -279,11 +279,14 @@ def skipped_invoice_generation_script():
             print("Aucune période manquée pour %s", invoice.code)
             continue
 
-        logger.info("Périodes manquées pour %s: %s", invoice.code, missing_periods)
-        print("Périodes manquées pour %s: %s", invoice.code, missing_periods)
-
         # Récupérer le jour de paiement
         payment_day = int(policy.payment_day) if policy.payment_day else 5
+
+        # en Janvier il faut préparer la derniere facture si nous avons deja depassé le jour
+        if payment_day < today.date().day:
+            missing_periods += 1
+        logger.info("Périodes manquées pour %s: %s", invoice.code, missing_periods)
+        print("Périodes manquées pour %s: %s", invoice.code, missing_periods)
 
         # Calculer les montants
         admin_user = InteractiveUser.objects.filter(id=1).first()
@@ -330,7 +333,7 @@ def skipped_invoice_generation_script():
 
         # Date de base pour les calculs
         base_due_date = calculate_due_date(
-            invoice.date_valid_from.date(), payment_day, periodicity)
+            invoice.date_valid_to.date(), payment_day, periodicity)
         base_valid_to = base_due_date + relativedelta(months=periodicity) - timedelta(days=1)
 
         # Vérifier si des factures existent déjà pour ces dates
