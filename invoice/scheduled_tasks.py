@@ -330,7 +330,7 @@ def skipped_invoice_generation_script():
 
         # Date de base pour les calculs
         base_due_date = calculate_due_date(
-            invoice.date_valid_to.date(), payment_day, periodicity)
+            invoice.date_valid_from.date(), payment_day, periodicity)
         base_valid_to = base_due_date + relativedelta(months=periodicity) - timedelta(days=1)
 
         # Vérifier si des factures existent déjà pour ces dates
@@ -415,7 +415,7 @@ def create_invoice(code, due_date, valid_from, valid_to, amount,
 
         logger.info("invoice_values %s", invoice_values)
         print("invoice_values %s", invoice_values)
-        invoice_result = invoice_service.create(invoice_values)
+        # invoice_result = invoice_service.create(invoice_values)
 
         if invoice_result.get("success"):
             # Créer la ligne de facture
