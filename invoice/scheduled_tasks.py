@@ -628,7 +628,7 @@ def invoice_generation_job():
                                                 logger.warning("current date_valid_to %s", date_valid_to)
                                                 existing_invoices = Invoice.objects.filter(
                                                     subject_id=invoice.subject_id,
-                                                    date_valid_from__date__gte=date_due.date(),
+                                                    date_valid_from__date__gte=date_due,
                                                     is_deleted=False
                                                 )
                                                 logger.warning("existing_invoices %s", existing_invoices)
