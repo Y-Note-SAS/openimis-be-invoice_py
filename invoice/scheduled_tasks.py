@@ -19,45 +19,55 @@ from invoice.apps import InvoiceConfig
 
 logger = logging.getLogger(__name__)
 
-def cron_correct_date_due():
+def compute_date_to(payment_day, creation_date):
+    """Calcule la bonne date from / date to"""
+    # Calculer la date_due correcte
+    if payment_day < creation_date.day:
+        # Mois suivant
+        if creation_date.month == 12:
+            year = creation_date.year + 1
+            month = 1
+        else:
+            year = creation_date.year
+            month = creation_date.month + 1
+    else:
+        # Mois courant
+        year = creation_date.year
+        month = creation_date.month
+
+    # Vérifier si le jour existe dans ce mois
+    days_in_month = calendar.monthrange(year, month)[1]
+
+    if payment_day > days_in_month:
+        # Le jour n'existe pas dans ce mois
+        # prendre le dernier jour du mois
+        day = days_in_month
+    else:
+        day = payment_day
+    return py_date(year, month, day)
+
+
+def cron_correct_dates():
     """
     Corrige les date_due erronées pour toutes les factures existantes.
     Règle : date_due doit être le payment_day du mois approprié
     """
-    logger.info("Début de la correction des dates dues des factures...")
+    logger.warning("Début de la correction des dates dues des factures...")
 
     all_invoices = Invoice.objects.filter(is_deleted=False)
-    corrected_count = 0
 
     for invoice in all_invoices:
+        fiels_to_update = []
+        corrected_date_from = []
+        corrected_date_to = []
+        corrected_date_due = []
         # Récupérer les informations
         creation_date = invoice.date_created  # Date de création de la facture
-        payment_day = invoice.date_due.day - 1     # Le jour de paiement
+        payment_day = invoice.date_due.day    # Le jour de paiement
+        payment_day2 = invoice.date_due.day #sans retier 1 jour, sera utilisé pour la datefrom
 
-        # Calculer la date_due correcte
-        if payment_day < creation_date.day:
-            # Mois suivant
-            if creation_date.month == 12:
-                year = creation_date.year + 1
-                month = 1
-            else:
-                year = creation_date.year
-                month = creation_date.month + 1
-        else:
-            # Mois courant
-            year = creation_date.year
-            month = creation_date.month
-
-        # Vérifier si le jour existe dans ce mois
-        days_in_month = calendar.monthrange(year, month)[1]
-
-        if payment_day > days_in_month:
-            # Le jour n'existe pas dans ce mois
-            # prendre le dernier jour du mois
-            day = days_in_month
-        else:
-            day = payment_day
-        correct_due_date = py_date(year, month, day)
+        computed_date_to = compute_date_to(payment_day, creation_date)
+        computed_date_from = compute_date_to(payment_day2, creation_date)
 
         # Tout ce block c'est juste pour récupérer la périodicité afin de
         # recalculer la date_to
@@ -84,18 +94,48 @@ def cron_correct_date_due():
                                     periodicity = 1
                             # Périodicité retrouvée
                             logger.info("periodicity %s", periodicity)
-                            new_date_to = correct_due_date + datetimedelta(
+                            new_date_to = computed_date_to + datetimedelta(
                                 months=periodicity
-                            )
+                            ) - timedelta(days=1)
                             # Comparer avec la date To actuelle
-                            logger.info(
-                                "Comparaison facture %s: Ancienne dateto: %s et Nouvelle dateto: %s",
+                            logger.warning(
+                                "Comparaison DateTo facture %s: Ancienne dateto: %s et Nouvelle dateto: %s",
                                 invoice.code,
                                 invoice.date_valid_to.date(),
                                 new_date_to
                             )
+                            logger.warning(
+                                "Comparaison Date debut %s: Ancienne dateFrom: %s et Nouvelle dateFrom: %s",
+                                invoice.code,
+                                invoice.date_valid_from.date(),
+                                computed_date_from
+                            )
+                            logger.warning(
+                                "Comparaison Date Due %s: Ancienne dateDue: %s et Nouvelle dateDue: %s",
+                                invoice.code,
+                                invoice.date_due,
+                                computed_date_from
+                            )
+                            # Date from is equals to date_due regarding the RFC
+                            if invoice.date_valid_from.date() != computed_date_from:
+                                corrected_data = {
+                                    "invoice_code": invoice.code,
+                                    "old_date_valid_from": invoice.date_valid_from.date(),
+                                    "new_date_valid_from": computed_date_from
+                                }
+                                invoice.date_valid_from = computed_date_from
+                                corrected_date_from.append(corrected_data)
+                                fiels_to_update.append('date_valid_from')
+                            if invoice.date_due != computed_date_from:
+                                corrected_data = {
+                                    "invoice_code": invoice.code,
+                                    "old_date_due": invoice.date_due,
+                                    "new_date_due": computed_date_from
+                                }
+                                invoice.date_due = computed_date_from
+                                corrected_date_due.append(corrected_data)
+                                fiels_to_update.append('date_due')
                             if invoice.date_valid_to.date() != new_date_to:
-                                logger.info("Mise a jour*")
                                 # Mettre à jour la date_due
                                 # Garder l'heure/minute/seconde d'origine,
                                 # changer seulement la date
@@ -105,15 +145,23 @@ def cron_correct_date_due():
                                     old_datetime.time(),
                                     tzinfo=old_datetime.tzinfo
                                 )
-                                logger.info("new_datetime %s", new_datetime)
 
+                                corrected_data = {
+                                    "invoice_code": invoice.code,
+                                    "old_date_valid_to": invoice.date_valid_to.date(),
+                                    "new_date_valid_to": new_date_to
+                                }
                                 invoice.date_valid_to = new_datetime
-                                invoice.save(username="Admin", update_fields=['date_valid_to'])
-                                corrected_count += 1
-                            else:
-                                print("Pas de mise a jour...")
+                                corrected_date_to.append(corrected_data)
+                                fiels_to_update.append('date_valid_to')
 
-    logger.info("Correction terminée. %s factures corrigées.", corrected_count)
+        if fiels_to_update:
+            logger.warning("fields to update %s", fiels_to_update)
+            logger.warning("Corrected date valid from %s", corrected_date_from)
+            logger.warning("Corrected date valid to %s", corrected_date_to)
+            logger.warning("Corrected date due %s", corrected_date_due)
+            invoice.save(username="Admin", update_fields=fiels_to_update)
+    logger.warning("Correction des dates des factures terminée")
 
 
 def calculate_missing_months(last_invoice_date: py_date, periodicity: int, today: py_date) -> int:
@@ -196,18 +244,17 @@ def skipped_invoice_generation_script():
     Rattrape les factures manquées.
     """
     today = py_datetime.today()
-    logger.info("Début de la génération des factures manquées. Date: %s", today)
+    logger.warning("Début de la génération des factures manquées. Date: %s", today)
 
-    # Filtrer seulement les factures expirées
-    expired_invoices = Invoice.objects.filter(
+    all_invoices = Invoice.objects.filter(
         is_deleted=False,
         date_valid_to__date__lt=today.date()
     )
 
-    logger.warning("Factures expirées trouvées: %s", len(expired_invoices))
+    logger.warning("Factures expirées trouvées: %s", len(all_invoices))
 
-    for invoice in expired_invoices:
-        logger.info("Traitement facture: %s", invoice.code)
+    for invoice in all_invoices:
+        logger.warning("Traitement facture: %s", invoice.code)
 
         if not invoice.subject_id:
             logger.warning("Facture %s sans subject_id, ignorée", invoice.code)
@@ -215,27 +262,36 @@ def skipped_invoice_generation_script():
 
         # Vérifier la famille et la police
         try:
-            family = Family.objects.get(
+            family = Family.objects.filter(
                 validity_to__isnull=True,
                 head_insuree=invoice.subject_id
-            )
-        except Family.DoesNotExist:
+            ).first()
+        except Exception as e:
             logger.warning(
-                "Famille non trouvée pour subject_id: %s", invoice.subject_id)
+                "Erreur pour la Famille : %s (%s)", invoice.subject_id, e)
+            continue
+        if not family:
+            logger.warning("Pas de famille trouvée pour l'assuré %s",
+                           invoice.subject_id)
             continue
 
         try:
-            insuree_policy = InsureePolicy.objects.get(
+            insuree_policy = InsureePolicy.objects.filter(
                 validity_to__isnull=True,
                 insuree_id=invoice.subject_id
-            )
-        except InsureePolicy.DoesNotExist:
-            logger.warning("Police d'assuré non trouvée pour: %s", invoice.subject_id)
+            ).first()
+        except Exception as e:
+            logger.warning("Erreur police pour: %s (%s)", invoice.subject_id, e)
             continue
 
+        if not insuree_policy:
+            logger.warning("Pas de police trouvé pour %s", invoice.subject_id)
+            continue
         policy = Policy.objects.filter(id=insuree_policy.policy_id).first()
         if not policy:
             logger.warning("Police non trouvée: %s", insuree_policy.policy_id)
+            continue
+        if not policy:
             continue
 
         contribution = policy.contribution_plan
@@ -245,11 +301,12 @@ def skipped_invoice_generation_script():
 
         # Vérifier la validité du plan de contribution
         if contribution.date_valid_from > today:
-            logger.info("Plan de contribution non encore valide: %s", contribution.date_valid_from)
+            logger.warning(
+                "Plan de contribution non encore valide: %s", contribution.date_valid_from)
             continue
 
         if contribution.date_valid_to and contribution.date_valid_to <= today:
-            logger.info("Plan de contribution expiré: %s", contribution.date_valid_to)
+            logger.warning("Plan de contribution expiré: %s", contribution.date_valid_to)
             continue
 
         # Déterminer la périodicité
@@ -258,27 +315,22 @@ def skipped_invoice_generation_script():
 
         # Calculer le nombre de périodes manquées
         missing_periods = calculate_missing_months(
-            invoice.date_valid_to.date(),
+            invoice.date_valid_from.date(),
             periodicity,
             today.date()
         )
 
-        if missing_periods == 0:
-            logger.info("Aucune période manquée pour %s", invoice.code)
-            continue
-
         # Récupérer le jour de paiement
         payment_day = int(policy.payment_day) if policy.payment_day else 5
 
-        # en Janvier il faut préparer la derniere facture si nous avons deja depassé le jour
-        if periodicity == 1 and payment_day < today.date().day:
-            missing_periods += 1
-        logger.info("Périodes manquées pour %s: %s", invoice.code, missing_periods)
+        logger.warning("Périodes manquées pour %s: %s", invoice.code, missing_periods)
+        if missing_periods == 0:
+            continue
 
         # Calculer les montants
         admin_user = InteractiveUser.objects.filter(id=1).first()
         if not admin_user:
-            logger.error("Utilisateur admin non trouvé")
+            logger.warning("Utilisateur admin non trouvé")
             continue
 
         # Calculer les montants (une seule fois)
@@ -321,20 +373,7 @@ def skipped_invoice_generation_script():
         # Date de base pour les calculs
         base_due_date1 = calculate_due_date(
             invoice.date_valid_from.date(), payment_day, periodicity)
-        base_due_date = calculate_due_date(
-            invoice.date_valid_to.date(), payment_day, periodicity)
-        # base_valid_to = base_due_date + relativedelta(months=periodicity) - timedelta(days=1)
         base_valid_to = base_due_date1 + relativedelta(months=periodicity) - timedelta(days=1)
-
-        # Vérifier si des factures existent déjà pour ces dates
-        existing_invoices = Invoice.objects.filter(
-            subject_id=invoice.subject_id,
-            date_valid_from__date__gte=base_due_date
-        ).exists()
-
-        if existing_invoices:
-            logger.info("Factures existantes trouvées pour %s, ignoré", invoice.subject_id)
-            continue
 
         # Créer les factures manquées
         for i in range(missing_periods):
@@ -343,6 +382,16 @@ def skipped_invoice_generation_script():
             period_due_date = base_due_date1 + relativedelta(months=periodicity * i)
             period_valid_from = period_due_date
             period_valid_to = base_valid_to + relativedelta(months=periodicity * i)
+            # Vérifier si des factures existent déjà pour ces dates
+            existing_invoices = Invoice.objects.filter(
+                subject_id=invoice.subject_id,
+                date_valid_from__date__gte=period_valid_from,
+                is_deleted=False
+            ).exists()
+
+            if existing_invoices:
+                logger.warning("Factures existantes trouvées pour %s, ignoré", invoice.code)
+                continue
 
             # Générer un code unique
             timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')
@@ -380,7 +429,7 @@ def skipped_invoice_generation_script():
                     admin_user=admin_user
                 )
 
-    logger.info("Génération des factures manquées terminée")
+    logger.warning("Génération des factures manquées terminée")
     return True
 
 
@@ -407,7 +456,7 @@ def create_invoice(code, due_date, valid_from, valid_to, amount,
             "thirdparty_type": "insuree"
         }
 
-        logger.info("invoice_values %s", invoice_values)
+        logger.warning("invoice_values %s", invoice_values)
         invoice_result = invoice_service.create(invoice_values)
 
         if invoice_result.get("success"):
@@ -443,6 +492,7 @@ def invoice_generation_job():
     """
     Cette fonction cree les factures automatique en fontion des RFC
     """
+    logger.info("Crontab for invoices generation started...")
     if InvoiceConfig.cron_auto_generate_invoices:
         today = py_datetime.today()
         all_invoices = Invoice.objects.filter(
@@ -578,7 +628,8 @@ def invoice_generation_job():
                                                 logger.warning("current date_valid_to %s", date_valid_to)
                                                 existing_invoices = Invoice.objects.filter(
                                                     subject_id=invoice.subject_id,
-                                                    date_valid_from__date__gte=date_due.date()
+                                                    date_valid_from__date__gte=date_due,
+                                                    is_deleted=False
                                                 )
                                                 logger.warning("existing_invoices %s", existing_invoices)
                                                 if not existing_invoices:
@@ -622,6 +673,7 @@ def invoice_generation_job():
                                                                 # update code as two invoice will be
                                                                 # created as the code is unique
                                                                 values["code"] = values["code"] + "-G"
+                                                                values["cron_job_code"] = values["cron_job_code"] + "-G"
                                                         invoice_service = InvoiceService(user=admin_user)
                                                         result_invoice = invoice_service.create(
                                                             values
@@ -649,6 +701,8 @@ def invoice_generation_job():
                                                                 # created as the code is unique
                                                                 item_values["code"] = item_values["code"] + "-G" +\
                                                                 str(py_datetime.now())
+                                                                item_values["cron_job_code"] = item_values["cron_job_code"] + "-G" +\
+                                                                str(py_datetime.now())
                                                             result = invoice_line_item_service.create(
                                                                 item_values
                                                             )
@@ -658,7 +712,7 @@ def invoice_generation_job():
                                                     # create Family invoice
                                                     if family_amount > 0:
                                                         invoice_service = InvoiceService(user=admin_user)
-                                                        gov_values = {
+                                                        fam_values = {
                                                             "code": code,
                                                             "date_due": date_due,
                                                             "date_valid_from": date_due,
@@ -669,14 +723,14 @@ def invoice_generation_job():
                                                             "cron_job_code": code
                                                         }
                                                         if policy.family.head_insuree:
-                                                            gov_values["subject_id"] = policy.\
+                                                            fam_values["subject_id"] = policy.\
                                                                 family.head_insuree.id
-                                                            gov_values["subject_type"] = "insuree"
-                                                            gov_values["thirdparty_id"] = policy.\
+                                                            fam_values["subject_type"] = "insuree"
+                                                            fam_values["thirdparty_id"] = policy.\
                                                                 family.head_insuree.id
-                                                            gov_values["thirdparty_type"] = "insuree"
+                                                            fam_values["thirdparty_type"] = "insuree"
                                                         result_invoice = invoice_service.create(
-                                                            gov_values
+                                                            fam_values
                                                         )
                                                         logger.warning(
                                                             "Invoice family amount created %s",
