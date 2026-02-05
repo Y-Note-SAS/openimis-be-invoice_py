@@ -673,6 +673,7 @@ def invoice_generation_job():
                                                                 # update code as two invoice will be
                                                                 # created as the code is unique
                                                                 values["code"] = values["code"] + "-G"
+                                                                values["cron_job_code"] = values["cron_job_code"] + "-G"
                                                         invoice_service = InvoiceService(user=admin_user)
                                                         result_invoice = invoice_service.create(
                                                             values
@@ -700,6 +701,8 @@ def invoice_generation_job():
                                                                 # created as the code is unique
                                                                 item_values["code"] = item_values["code"] + "-G" +\
                                                                 str(py_datetime.now())
+                                                                item_values["cron_job_code"] = item_values["cron_job_code"] + "-G" +\
+                                                                str(py_datetime.now())
                                                             result = invoice_line_item_service.create(
                                                                 item_values
                                                             )
@@ -709,7 +712,7 @@ def invoice_generation_job():
                                                     # create Family invoice
                                                     if family_amount > 0:
                                                         invoice_service = InvoiceService(user=admin_user)
-                                                        gov_values = {
+                                                        fam_values = {
                                                             "code": code,
                                                             "date_due": date_due,
                                                             "date_valid_from": date_due,
@@ -720,14 +723,14 @@ def invoice_generation_job():
                                                             "cron_job_code": code
                                                         }
                                                         if policy.family.head_insuree:
-                                                            gov_values["subject_id"] = policy.\
+                                                            fam_values["subject_id"] = policy.\
                                                                 family.head_insuree.id
-                                                            gov_values["subject_type"] = "insuree"
-                                                            gov_values["thirdparty_id"] = policy.\
+                                                            fam_values["subject_type"] = "insuree"
+                                                            fam_values["thirdparty_id"] = policy.\
                                                                 family.head_insuree.id
-                                                            gov_values["thirdparty_type"] = "insuree"
+                                                            fam_values["thirdparty_type"] = "insuree"
                                                         result_invoice = invoice_service.create(
-                                                            gov_values
+                                                            fam_values
                                                         )
                                                         logger.warning(
                                                             "Invoice family amount created %s",
