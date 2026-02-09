@@ -16,6 +16,7 @@ from policy.apps import CALCULATION_RULES
 from invoice.services import InvoiceService
 from invoice.services.invoiceLineItem import InvoiceLineItemService
 from invoice.apps import InvoiceConfig
+from django.db.models import Q
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,15 @@ def cron_correct_dates():
     """
     logger.warning("Début de la correction des dates dues des factures...")
 
-    all_invoices = Invoice.objects.filter(is_deleted=False)
+    all_invoices = Invoice.objects.filter(
+        is_deleted=False
+    ).exclude(
+        Q(date_valid_to__day=4) |
+        Q(date_valid_to__day=9) |
+        Q(date_valid_to__day=14) |
+        Q(date_valid_to__day=19)
+    )
+    logger.warning("factures totales %s", len(all_invoices))
 
     for invoice in all_invoices:
         fiels_to_update = []
@@ -72,88 +81,85 @@ def cron_correct_dates():
         # Tout ce block c'est juste pour récupérer la périodicité afin de
         # recalculer la date_to
         if invoice.subject_id:
+            insuree = Insuree.objects.filter(
+                id=invoice.subject_id
+            ).first()
             family = Family.objects.filter(
-                validity_to__isnull=True,
-                head_insuree=invoice.subject_id).first()
+                id=insuree.family.id).first()
             if family:
-                insureepolicy = InsureePolicy.objects.filter(
-                    validity_to__isnull=True,
-                    insuree_id=invoice.subject_id).first()
-                if insureepolicy:
-                    policy_id = insureepolicy.policy_id
-                    if policy_id:
-                        policy = Policy.objects.filter(id=policy_id).first()
-                        if policy:
-                            periodicity = 12
-                            if policy.periodicity:
-                                if policy.periodicity == 'Q':
-                                    periodicity = 3
-                                elif policy.periodicity == 'S':
-                                    periodicity = 6
-                                elif policy.periodicity == 'M':
-                                    periodicity = 1
-                            # Périodicité retrouvée
-                            logger.info("periodicity %s", periodicity)
-                            new_date_to = computed_date_to + datetimedelta(
-                                months=periodicity
-                            ) - timedelta(days=1)
-                            # Comparer avec la date To actuelle
-                            logger.warning(
-                                "Comparaison DateTo facture %s: Ancienne dateto: %s et Nouvelle dateto: %s",
-                                invoice.code,
-                                invoice.date_valid_to.date(),
-                                new_date_to
-                            )
-                            logger.warning(
-                                "Comparaison Date debut %s: Ancienne dateFrom: %s et Nouvelle dateFrom: %s",
-                                invoice.code,
-                                invoice.date_valid_from.date(),
-                                computed_date_from
-                            )
-                            logger.warning(
-                                "Comparaison Date Due %s: Ancienne dateDue: %s et Nouvelle dateDue: %s",
-                                invoice.code,
-                                invoice.date_due,
-                                computed_date_from
-                            )
-                            # Date from is equals to date_due regarding the RFC
-                            if invoice.date_valid_from.date() != computed_date_from:
-                                corrected_data = {
-                                    "invoice_code": invoice.code,
-                                    "old_date_valid_from": invoice.date_valid_from.date(),
-                                    "new_date_valid_from": computed_date_from
-                                }
-                                invoice.date_valid_from = computed_date_from
-                                corrected_date_from.append(corrected_data)
-                                fiels_to_update.append('date_valid_from')
-                            if invoice.date_due != computed_date_from:
-                                corrected_data = {
-                                    "invoice_code": invoice.code,
-                                    "old_date_due": invoice.date_due,
-                                    "new_date_due": computed_date_from
-                                }
-                                invoice.date_due = computed_date_from
-                                corrected_date_due.append(corrected_data)
-                                fiels_to_update.append('date_due')
-                            if invoice.date_valid_to.date() != new_date_to:
-                                # Mettre à jour la date_due
-                                # Garder l'heure/minute/seconde d'origine,
-                                # changer seulement la date
-                                old_datetime = invoice.date_valid_to
-                                new_datetime = py_datetime.combine(
-                                    new_date_to,
-                                    old_datetime.time(),
-                                    tzinfo=old_datetime.tzinfo
-                                )
+                policy = Policy.objects.filter(
+                    validity_to__isnull=True, family_id=family.id).first()
+                if policy:
+                    periodicity = 12
+                    if policy.periodicity:
+                        if policy.periodicity == 'Q':
+                            periodicity = 3
+                        elif policy.periodicity == 'S':
+                            periodicity = 6
+                        elif policy.periodicity == 'M':
+                            periodicity = 1
+                    # Périodicité retrouvée
+                    logger.info("periodicity %s", periodicity)
+                    new_date_to = computed_date_to + datetimedelta(
+                        months=periodicity
+                    ) - timedelta(days=1)
+                    # Comparer avec la date To actuelle
+                    logger.warning(
+                        "Comparaison DateTo facture %s: Ancienne dateto: %s et Nouvelle dateto: %s",
+                        invoice.code,
+                        invoice.date_valid_to.date(),
+                        new_date_to
+                    )
+                    logger.warning(
+                        "Comparaison Date debut %s: Ancienne dateFrom: %s et Nouvelle dateFrom: %s",
+                        invoice.code,
+                        invoice.date_valid_from.date(),
+                        computed_date_from
+                    )
+                    logger.warning(
+                        "Comparaison Date Due %s: Ancienne dateDue: %s et Nouvelle dateDue: %s",
+                        invoice.code,
+                        invoice.date_due,
+                        computed_date_from
+                    )
+                    # Date from is equals to date_due regarding the RFC
+                    if invoice.date_valid_from.date() != computed_date_from:
+                        corrected_data = {
+                            "invoice_code": invoice.code,
+                            "old_date_valid_from": invoice.date_valid_from.date(),
+                            "new_date_valid_from": computed_date_from
+                        }
+                        invoice.date_valid_from = computed_date_from
+                        corrected_date_from.append(corrected_data)
+                        fiels_to_update.append('date_valid_from')
+                    if invoice.date_due != computed_date_from:
+                        corrected_data = {
+                            "invoice_code": invoice.code,
+                            "old_date_due": invoice.date_due,
+                            "new_date_due": computed_date_from
+                        }
+                        invoice.date_due = computed_date_from
+                        corrected_date_due.append(corrected_data)
+                        fiels_to_update.append('date_due')
+                    if invoice.date_valid_to.date() != new_date_to:
+                        # Mettre à jour la date_due
+                        # Garder l'heure/minute/seconde d'origine,
+                        # changer seulement la date
+                        old_datetime = invoice.date_valid_to
+                        new_datetime = py_datetime.combine(
+                            new_date_to,
+                            old_datetime.time(),
+                            tzinfo=old_datetime.tzinfo
+                        )
 
-                                corrected_data = {
-                                    "invoice_code": invoice.code,
-                                    "old_date_valid_to": invoice.date_valid_to.date(),
-                                    "new_date_valid_to": new_date_to
-                                }
-                                invoice.date_valid_to = new_datetime
-                                corrected_date_to.append(corrected_data)
-                                fiels_to_update.append('date_valid_to')
+                        corrected_data = {
+                            "invoice_code": invoice.code,
+                            "old_date_valid_to": invoice.date_valid_to.date(),
+                            "new_date_valid_to": new_date_to
+                        }
+                        invoice.date_valid_to = new_datetime
+                        corrected_date_to.append(corrected_data)
+                        fiels_to_update.append('date_valid_to')
 
         if fiels_to_update:
             logger.warning("fields to update %s", fiels_to_update)
@@ -445,6 +451,7 @@ def create_invoice(code, due_date, valid_from, valid_to, amount,
             "code": code,
             "date_due": py_datetime.combine(due_date, py_datetime.min.time()),
             "date_valid_from": py_datetime.combine(valid_from, py_datetime.min.time()),
+            "date_created": py_datetime.combine(valid_from, py_datetime.min.time()),
             "date_valid_to": py_datetime.combine(valid_to, py_datetime.min.time()),
             "amount_net": amount,
             "amount_total": amount,
@@ -496,7 +503,9 @@ def invoice_generation_job():
     if InvoiceConfig.cron_auto_generate_invoices:
         today = py_datetime.today()
         all_invoices = Invoice.objects.filter(
-            date_valid_to__date=today.date())
+            is_deleted=False,
+            date_valid_to__date=today.date()
+        )
         logger.warning("All invoices found %s ", all_invoices)
         for invoice in all_invoices:
             print("invoice code ", invoice.code)
