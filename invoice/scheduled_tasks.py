@@ -57,11 +57,6 @@ def cron_correct_dates():
 
     all_invoices = Invoice.objects.filter(
         is_deleted=False
-    ).exclude(
-        Q(date_valid_to__day=4) |
-        Q(date_valid_to__day=9) |
-        Q(date_valid_to__day=14) |
-        Q(date_valid_to__day=19)
     )
     logger.warning("factures totales %s", len(all_invoices))
 
