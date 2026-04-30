@@ -1,22 +1,24 @@
 import base64
+import hashlib
+import json
+import logging
+import time
 from collections import defaultdict
+from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
 import graphene
+from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 from django.contrib.contenttypes.models import ContentType
+from django.core.cache import cache
 
 from invoice.apps import InvoiceConfig
 from invoice.models import DetailPaymentInvoice, Invoice
 from insuree.models import Insuree
 
-
-class InvoicePaymentItemGQLType(graphene.ObjectType):
-    payment_id = graphene.UUID(required=True)
-    payment_date = graphene.Date()
-    payment_amount = graphene.Decimal()
-    payment_reference = graphene.String()
+logger = logging.getLogger(__name__)
 
 
 class FamilyInvoicePaymentOverviewItemGQLType(graphene.ObjectType):
@@ -28,6 +30,7 @@ class FamilyInvoicePaymentOverviewItemGQLType(graphene.ObjectType):
     amount_due = graphene.Decimal()
     total_invoice_payments = graphene.Decimal()
     invoice_balance = graphene.Decimal()
+    last_payment = graphene.Date()
     has_invoice_payments = graphene.Boolean(required=True)
 
 
@@ -42,12 +45,21 @@ class FamilyInvoicePaymentOverviewGQLType(graphene.ObjectType):
     total_count = graphene.Int(required=True)
     page_info = graphene.Field(FamilyInvoicePaymentOverviewPageInfoGQLType, required=True)
     items = graphene.List(FamilyInvoicePaymentOverviewItemGQLType, required=True)
-    total_invoice_amount = graphene.Decimal()
-    total_paid_amount = graphene.Decimal()
-    global_balance = graphene.Decimal()
+
+
+class FamilyInvoicePaymentGlobalsGQLType(graphene.ObjectType):
+    total_invoice_amount = graphene.Decimal(required=True)
+    total_paid_amount = graphene.Decimal(required=True)
+    global_balance = graphene.Decimal(required=True)
 
 
 class FamilyInvoicePaymentOverviewQueryMixin:
+    SNAPSHOT_CACHE_KEY_PREFIX = "family_invoice_payment_snapshot"
+    SNAPSHOT_CACHE_CODE_VERSION = "v1"
+    SNAPSHOT_CACHE_TTL_SECONDS = getattr(settings, "INVOICE_FAMILY_OVERVIEW_CACHE_TTL_SECONDS", 180)
+    SNAPSHOT_CACHE_MAX_ROWS = getattr(settings, "INVOICE_FAMILY_OVERVIEW_CACHE_MAX_ROWS", 10000)
+    SNAPSHOT_CACHE_ENABLED = getattr(settings, "INVOICE_FAMILY_OVERVIEW_CACHE_ENABLED", True)
+
     family_invoice_payment_overview = graphene.Field(
         FamilyInvoicePaymentOverviewGQLType,
         head_insuree_id=graphene.String(required=True),
@@ -56,11 +68,9 @@ class FamilyInvoicePaymentOverviewQueryMixin:
         before=graphene.String(),
         last=graphene.Int(),
     )
-
-    invoice_payments = graphene.List(
-        InvoicePaymentItemGQLType,
-        invoice_id=graphene.String(required=True),
-        head_insuree_id=graphene.String(required=False),
+    family_invoice_payment_globals = graphene.Field(
+        FamilyInvoicePaymentGlobalsGQLType,
+        head_insuree_id=graphene.String(required=True),
     )
 
     def resolve_family_invoice_payment_overview(self, info, **kwargs):
@@ -70,10 +80,84 @@ class FamilyInvoicePaymentOverviewQueryMixin:
         if not head_insuree_id:
             return FamilyInvoicePaymentOverviewQueryMixin._empty_overview()
 
-        subject_ids = FamilyInvoicePaymentOverviewQueryMixin._normalize_head_insuree_subject_ids(head_insuree_id)
-        if not subject_ids:
+        snapshot = FamilyInvoicePaymentOverviewQueryMixin._get_or_build_snapshot(info.context.user, head_insuree_id)
+        if not snapshot:
             return FamilyInvoicePaymentOverviewQueryMixin._empty_overview()
+        page_slice_start = time.perf_counter()
+        total_count = snapshot["total_count"]
+        page_rows_dicts, page_info = FamilyInvoicePaymentOverviewQueryMixin._paginate_rows(snapshot["rows"], kwargs)
+        page_rows = [FamilyInvoicePaymentOverviewQueryMixin._row_dict_to_gql(row) for row in page_rows_dicts]
+        logger.info(
+            "family_invoice_payment_overview page_slice_ms=%.2f rows_count=%s",
+            (time.perf_counter() - page_slice_start) * 1000,
+            total_count,
+        )
 
+        return FamilyInvoicePaymentOverviewGQLType(
+            total_count=total_count,
+            page_info=FamilyInvoicePaymentOverviewPageInfoGQLType(**page_info),
+            items=page_rows,
+        )
+
+    def resolve_family_invoice_payment_globals(self, info, **kwargs):
+        FamilyInvoicePaymentOverviewQueryMixin._check_permissions(info.context.user)
+
+        head_insuree_id = kwargs.get("head_insuree_id")
+        if not head_insuree_id:
+            return FamilyInvoicePaymentGlobalsGQLType(
+                total_invoice_amount=Decimal("0"),
+                total_paid_amount=Decimal("0"),
+                global_balance=Decimal("0"),
+            )
+
+        snapshot = FamilyInvoicePaymentOverviewQueryMixin._get_or_build_snapshot(info.context.user, head_insuree_id)
+        if not snapshot:
+            return FamilyInvoicePaymentGlobalsGQLType(
+                total_invoice_amount=Decimal("0"),
+                total_paid_amount=Decimal("0"),
+                global_balance=Decimal("0"),
+            )
+        total_invoice_amount = Decimal(snapshot["totals"]["total_invoice_amount"])
+        total_paid_amount = Decimal(snapshot["totals"]["total_paid_amount"])
+        return FamilyInvoicePaymentGlobalsGQLType(
+            total_invoice_amount=total_invoice_amount,
+            total_paid_amount=total_paid_amount,
+            global_balance=total_invoice_amount - total_paid_amount,
+        )
+
+    @classmethod
+    def _get_or_build_snapshot(cls, user, head_insuree_id):
+        subject_ids = cls._normalize_head_insuree_subject_ids(head_insuree_id)
+        if not subject_ids:
+            return None
+        cache_key = cls._snapshot_cache_key(user, head_insuree_id, subject_ids)
+        if cls.SNAPSHOT_CACHE_ENABLED:
+            try:
+                cached_snapshot = cache.get(cache_key)
+                if cached_snapshot is not None:
+                    logger.info("family_invoice_payment_snapshot cache_hit key=%s", cache_key)
+                    return cached_snapshot
+            except Exception:
+                logger.exception("family_invoice_payment_snapshot cache_get_error key=%s", cache_key)
+        logger.info("family_invoice_payment_snapshot cache_miss key=%s", cache_key)
+        build_start = time.perf_counter()
+        snapshot = cls._build_snapshot(user, subject_ids)
+        logger.info(
+            "family_invoice_payment_snapshot build_ms=%.2f rows_count=%s",
+            (time.perf_counter() - build_start) * 1000,
+            snapshot["total_count"] if snapshot else 0,
+        )
+        if not snapshot:
+            return None
+        if cls.SNAPSHOT_CACHE_ENABLED and snapshot["total_count"] <= cls.SNAPSHOT_CACHE_MAX_ROWS:
+            try:
+                cache.set(cache_key, snapshot, timeout=cls.SNAPSHOT_CACHE_TTL_SECONDS)
+            except Exception:
+                logger.exception("family_invoice_payment_snapshot cache_set_error key=%s", cache_key)
+        return snapshot
+
+    @classmethod
+    def _build_snapshot(cls, user, subject_ids):
         invoice_queryset = Invoice.objects.filter(
             subject_type__model="insuree",
             subject_id__in=subject_ids,
@@ -81,102 +165,86 @@ class FamilyInvoicePaymentOverviewQueryMixin:
             thirdparty_id__in=subject_ids,
             is_deleted=False,
         ).order_by("date_invoice", "id")
-
         if InvoiceConfig.invoice_user_filter:
-            invoice_queryset = InvoiceConfig.invoice_user_filter(invoice_queryset, info.context.user)
-
+            invoice_queryset = InvoiceConfig.invoice_user_filter(invoice_queryset, user)
         invoices = list(invoice_queryset)
         if not invoices:
-            return FamilyInvoicePaymentOverviewQueryMixin._empty_overview()
-
-        invoice_payment_details_by_invoice_id = FamilyInvoicePaymentOverviewQueryMixin._get_invoice_payment_details_by_invoice_id(invoices)
-
+            return None
+        invoice_payment_details_by_invoice_id = cls._get_invoice_payment_details_by_invoice_id(invoices)
         total_invoice_amount = sum(Decimal(invoice.amount_total or 0) for invoice in invoices)
         total_paid_amount = sum(
             Decimal(payment_detail.amount or 0)
             for payment_details in invoice_payment_details_by_invoice_id.values()
             for payment_detail in payment_details
         )
-        global_balance = total_invoice_amount - total_paid_amount
-
-        invoice_rows = []
+        rows = []
         for invoice in invoices:
             payment_details = invoice_payment_details_by_invoice_id.get(str(invoice.id), [])
             amount_due = Decimal(invoice.amount_total or 0)
             total_invoice_payments = sum(Decimal(payment_detail.amount or 0) for payment_detail in payment_details)
             invoice_balance = amount_due - total_invoice_payments
-            invoice_rows.append(
-                FamilyInvoicePaymentOverviewItemGQLType(
-                    row_id=f"invoice-{invoice.id}",
-                    invoice_id=invoice.id,
-                    invoice_code=invoice.code,
-                    covered_from=invoice.date_valid_from,
-                    covered_to=invoice.date_valid_to,
-                    amount_due=amount_due,
-                    total_invoice_payments=total_invoice_payments,
-                    invoice_balance=invoice_balance,
-                    has_invoice_payments=bool(payment_details),
-                )
+            last_payment = payment_details[-1].payment.date_payment if payment_details else None
+            rows.append(
+                {
+                    "row_id": f"invoice-{invoice.id}",
+                    "invoice_id": str(invoice.id),
+                    "invoice_code": invoice.code,
+                    "covered_from": invoice.date_valid_from.isoformat() if invoice.date_valid_from else None,
+                    "covered_to": invoice.date_valid_to.isoformat() if invoice.date_valid_to else None,
+                    "amount_due": str(amount_due),
+                    "total_invoice_payments": str(total_invoice_payments),
+                    "invoice_balance": str(invoice_balance),
+                    "last_payment": last_payment.isoformat() if last_payment else None,
+                    "has_invoice_payments": bool(payment_details),
+                }
             )
-
-        total_count = len(invoice_rows)
-        page_rows, page_info = FamilyInvoicePaymentOverviewQueryMixin._paginate_rows(invoice_rows, kwargs)
-
-        return FamilyInvoicePaymentOverviewGQLType(
-            total_count=total_count,
-            page_info=FamilyInvoicePaymentOverviewPageInfoGQLType(**page_info),
-            items=page_rows,
-            total_invoice_amount=total_invoice_amount,
-            total_paid_amount=total_paid_amount,
-            global_balance=global_balance,
-        )
-
-    def resolve_invoice_payments(self, info, **kwargs):
-        FamilyInvoicePaymentOverviewQueryMixin._check_permissions(info.context.user)
-
-        invoice_id = kwargs.get("invoice_id")
-        head_insuree_id = kwargs.get("head_insuree_id")
-        if not invoice_id:
-            return []
-
-        invoice_scope_filter = {
-            "id": str(invoice_id),
-            "subject_type__model": "insuree",
-            "thirdparty_type__model": "insuree",
-            "is_deleted": False,
+        return {
+            "rows": rows,
+            "total_count": len(rows),
+            "totals": {
+                "total_invoice_amount": str(total_invoice_amount),
+                "total_paid_amount": str(total_paid_amount),
+                "global_balance": str(total_invoice_amount - total_paid_amount),
+            },
         }
-        if head_insuree_id:
-            subject_ids = FamilyInvoicePaymentOverviewQueryMixin._normalize_head_insuree_subject_ids(head_insuree_id)
-            if not subject_ids:
-                return []
-            invoice_scope_filter["subject_id__in"] = subject_ids
-            invoice_scope_filter["thirdparty_id__in"] = subject_ids
 
-        invoice_matches_scope = Invoice.objects.filter(**invoice_scope_filter).exists()
-        if not invoice_matches_scope:
-            return []
+    @classmethod
+    def _snapshot_cache_key(cls, user, head_insuree_id, subject_ids):
+        key_payload = {
+            "user_id": user.id,
+            "head_insuree_id": str(head_insuree_id),
+            "subject_ids": sorted([str(subject_id) for subject_id in subject_ids]),
+            "code_version": cls.SNAPSHOT_CACHE_CODE_VERSION,
+        }
+        key_hash = hashlib.sha256(
+            json.dumps(key_payload, sort_keys=True, default=str).encode("utf-8")
+        ).hexdigest()
+        return f"{cls.SNAPSHOT_CACHE_KEY_PREFIX}:{user.id}:{head_insuree_id}:{key_hash}"
 
-        invoice_content_type = ContentType.objects.get_for_model(Invoice)
-        invoice_payment_details = (
-            DetailPaymentInvoice.objects.filter(
-                subject_type=invoice_content_type,
-                subject_id=str(invoice_id),
-                is_deleted=False,
-                payment__is_deleted=False,
-            )
-            .select_related("payment")
-            .order_by("payment__date_payment", "payment__id")
+    @staticmethod
+    def _row_dict_to_gql(row):
+        def _to_date(value):
+            if not value:
+                return None
+            if isinstance(value, date):
+                return value
+            value_str = str(value)
+            if "T" in value_str:
+                value_str = value_str.split("T", 1)[0]
+            return date.fromisoformat(value_str)
+
+        return FamilyInvoicePaymentOverviewItemGQLType(
+            row_id=row["row_id"],
+            invoice_id=row["invoice_id"],
+            invoice_code=row.get("invoice_code"),
+            covered_from=_to_date(row.get("covered_from")),
+            covered_to=_to_date(row.get("covered_to")),
+            amount_due=Decimal(row.get("amount_due") or "0"),
+            total_invoice_payments=Decimal(row.get("total_invoice_payments") or "0"),
+            invoice_balance=Decimal(row.get("invoice_balance") or "0"),
+            last_payment=_to_date(row.get("last_payment")),
+            has_invoice_payments=bool(row.get("has_invoice_payments")),
         )
-
-        return [
-            InvoicePaymentItemGQLType(
-                payment_id=payment_detail.payment.id,
-                payment_date=payment_detail.payment.date_payment,
-                payment_amount=Decimal(payment_detail.amount or 0),
-                payment_reference=payment_detail.payment.code_ext,
-            )
-            for payment_detail in invoice_payment_details
-        ]
 
     @staticmethod
     def _empty_overview():
@@ -189,9 +257,6 @@ class FamilyInvoicePaymentOverviewQueryMixin:
                 end_cursor=None,
             ),
             items=[],
-            total_invoice_amount=Decimal("0"),
-            total_paid_amount=Decimal("0"),
-            global_balance=Decimal("0"),
         )
 
     @staticmethod
@@ -204,7 +269,7 @@ class FamilyInvoicePaymentOverviewQueryMixin:
                 subject_type=invoice_content_type,
                 subject_id__in=invoice_ids,
                 is_deleted=False,
-                payment__is_deleted=False,
+                payment__is_deleted=False
             )
             .select_related("payment")
             .order_by("payment__date_payment", "payment__id")
