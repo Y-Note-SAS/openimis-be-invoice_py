@@ -54,6 +54,7 @@ class Query(
     query_mixins.BillEventQueryMixin,
     query_mixins.PaymentInvoiceQueryMixin,
     query_mixins.DetailPaymentInvoiceQueryMixin,
+    query_mixins.FamilyInvoicePaymentOverviewQueryMixin,
     graphene.ObjectType
 ):
     pass
