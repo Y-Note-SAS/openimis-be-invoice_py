@@ -18,6 +18,8 @@ from invoice.services.invoiceLineItem import InvoiceLineItemService
 from invoice.apps import InvoiceConfig
 from django.db.models import Q
 from policyholder.models import PolicyHolder
+from insuree.apps import InsureeConfig
+from django.db.models import Exists, OuterRef
 
 logger = logging.getLogger(__name__)
 
@@ -490,12 +492,56 @@ def create_invoice(code, due_date, valid_from, valid_to, amount,
         logger.error("Exception création facture %s: %s", code, str(e))
         return False
 
+def make_own_and_child_exists(status=None, **extra_filters):
+    """
+    Retourne un tuple (Exists sur famille elle-même, Exists sur familles enfants),
+    à combiner ensuite avec un OR au niveau du queryset principal.
+    """
+    base_filters = {'validity_to__isnull': True, **extra_filters}
+    if status is not None:
+        base_filters['status'] = status
+
+    own_policy = Policy.objects.filter(
+        family=OuterRef('pk'), **base_filters
+    )
+    child_policy = Policy.objects.filter(
+        family__parent=OuterRef('pk'), **base_filters
+    )
+    return Exists(own_policy), Exists(child_policy)
+
 
 def invoice_generation_job():
     """
     Cette fonction cree les factures automatique en fontion des RFC
     """
     logger.info("Crontab for invoices generation started...")
+    fixed_number_of_months = InsureeConfig.number_of_months_for_suspended_policy
+    today = py_date.today()
+    threshold_date = today - relativedelta(months=fixed_number_of_months)
+
+    own_exists, child_exists = make_own_and_child_exists(
+        status=Policy.STATUS_EXPIRED, expiry_date__lte=threshold_date
+    )
+    own_any, child_any = make_own_and_child_exists()
+    own_valid = Exists(
+        Policy.objects.filter(
+            family=OuterRef('pk'),
+            validity_to__isnull=True
+        ).exclude(
+            status=Policy.STATUS_EXPIRED, 
+            expiry_date__lte=threshold_date
+        )
+    )
+
+    child_valid = Exists(
+        Policy.objects.filter(
+            family__parent=OuterRef('pk'),
+            validity_to__isnull=True
+        ).exclude(
+            status=Policy.STATUS_EXPIRED, 
+            expiry_date__lte=threshold_date
+        )
+    )
     if InvoiceConfig.cron_auto_generate_invoices:
         today = py_datetime.today()
         all_invoices = Invoice.objects.filter(
@@ -515,6 +561,20 @@ def invoice_generation_job():
                     head_insuree=invoice.subject_id).first()
                 logger.warning("family %s ", family)
                 if family:
+                    is_preaffiliated = Family.objects.filter(
+                        id=family.id,
+                        validity_to__isnull=True
+                    ).filter(
+                        # Doit respecter vos conditions d'origine
+                        Q(own_exists) | Q(child_exists) | (~Q(own_any) & ~Q(child_any))
+                    ).exclude(
+                        # MAIS on refuse catégoriquement si le parent /enfant a une police valide
+                        Q(own_valid) | Q(child_valid)
+                    ).exists()
+
+                    if is_preaffiliated:
+                        print(f"La famille {family.id} est préaffiliée -> On ignore.")
+                        continue  # Passe à la famille suivante sans créer de facture
                     insureepolicy = InsureePolicy.objects.filter(
                         validity_to__isnull=True,
                         insuree_id=invoice.subject_id).first()
