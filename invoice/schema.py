@@ -137,7 +137,6 @@ def on_payment_invoice_mutation(sender, **kwargs):
 
     return []
 
-
 signal_mutation_module_validate["invoice"].connect(on_invoice_payment_mutation)
 signal_mutation_module_validate["invoice"].connect(on_bill_payment_mutation)
 signal_mutation_module_validate["invoice"].connect(on_payment_invoice_mutation)
