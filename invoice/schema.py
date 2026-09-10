@@ -54,6 +54,7 @@ class Query(
     query_mixins.BillEventQueryMixin,
     query_mixins.PaymentInvoiceQueryMixin,
     query_mixins.DetailPaymentInvoiceQueryMixin,
+    query_mixins.FamilyInvoicePaymentOverviewQueryMixin,
     graphene.ObjectType
 ):
     pass
@@ -135,7 +136,6 @@ def on_payment_invoice_mutation(sender, **kwargs):
         return _on_mutation_log(DetailPaymentInvoiceMutation, DetailPaymentInvoice, 'detail_payment_invoice', sender, **kwargs)
 
     return []
-
 
 signal_mutation_module_validate["invoice"].connect(on_invoice_payment_mutation)
 signal_mutation_module_validate["invoice"].connect(on_bill_payment_mutation)
