@@ -7,7 +7,6 @@ from collections import defaultdict
 from datetime import date
 from decimal import Decimal
 from uuid import UUID
-
 import graphene
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
