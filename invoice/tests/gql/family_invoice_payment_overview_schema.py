@@ -81,7 +81,18 @@ class FamilyInvoicePaymentOverviewGQLTest(InvoiceGQLTestCase):
             amount_total="30.00",
             date_invoice=date(2021, 3, 10),
         )
+        # Invoice on the family insuree but charged to a third party (e.g. AFD/government),
+        # with its own payment: it must be excluded from both the list and the totals.
+        cls.third_party_invoice = create_test_invoice(
+            subject=cls.insuree,
+            thirdparty=cls.other_insuree,
+            user=cls.user,
+            code="FAMILY_OVERVIEW_INVOICE_THIRD_PARTY",
+            amount_total="70.00",
+            date_invoice=date(2021, 4, 10),
+        )
         create_test_payment_invoice_with_details(invoice=cls.first_invoice, user=cls.user)
+        create_test_payment_invoice_with_details(invoice=cls.third_party_invoice, user=cls.user)
         cls.user_without_rights = create_test_interactive_user(
             username="family_overview_no_rights",
             roles=[],
@@ -173,6 +184,28 @@ class FamilyInvoicePaymentOverviewGQLTest(InvoiceGQLTestCase):
         self.assertEqual(
             [item["invoiceCode"] for item in second_page_node["items"]],
             ["FAMILY_OVERVIEW_INVOICE_2"],
+        )
+
+    def test_family_invoice_payment_overview_excludes_invoices_charged_to_a_third_party(self):
+        overview = self.graph_client.execute(
+            OVERVIEW_QUERY % (self.insuree.uuid, ""), context=self.user_context.get_request()
+        )["data"]["familyInvoicePaymentOverview"]
+        globals_ = self.graph_client.execute(
+            GLOBALS_QUERY % self.insuree.uuid, context=self.user_context.get_request()
+        )["data"]["familyInvoicePaymentGlobals"]
+
+        self.assertEqual(
+            [item["invoiceCode"] for item in overview["items"]],
+            ["FAMILY_OVERVIEW_INVOICE_1", "FAMILY_OVERVIEW_INVOICE_2"],
+        )
+        self.assertEqual(overview["totalCount"], 2)
+        self.assertEqual(
+            globals_,
+            {
+                "totalInvoiceAmount": "150.00",
+                "totalPaidAmount": "91.50",
+                "globalBalance": "58.50",
+            },
         )
 
     def test_family_invoice_payment_globals_aggregates_the_family_invoices(self):
