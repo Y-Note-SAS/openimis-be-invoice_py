@@ -8,3 +8,4 @@ from invoice.gql.bill_payment import BillPaymentQueryMixin
 from invoice.gql.bill_event import BillEventQueryMixin
 from invoice.gql.payment_invoice import PaymentInvoiceQueryMixin
 from invoice.gql.detail_payment_invoice import DetailPaymentInvoiceQueryMixin
+from invoice.gql.family_invoice_payment_overview import FamilyInvoicePaymentOverviewQueryMixin
