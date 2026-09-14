@@ -338,7 +338,6 @@ class PaymentInvoice(GenericInvoiceQuerysetMixin, HistoryModel):
     payer_ref = models.CharField(db_column='PayerRef', max_length=255)
 
     payment_destination = models.UUIDField(
-        models.DO_NOTHING,
         db_column='PaymentDestinationID',
         null=True,
         blank=True

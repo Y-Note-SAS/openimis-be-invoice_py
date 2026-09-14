@@ -21,7 +21,7 @@ from invoice.models import (
     PaymentInvoiceMutation,
     DetailPaymentInvoice
 )
-from ledger.models import AnalyticAxis
+from django.conf import settings
 
 
 class CreatePaymentInvoiceMutation(BaseHistoryModelCreateMutationMixin, BaseMutation):
@@ -66,8 +66,10 @@ class CreatePaymentInvoiceWithDetailMutation(BaseHistoryModelCreateMutationMixin
             data.pop('client_mutation_id')
         if "client_mutation_label" in data:
             data.pop('client_mutation_label')
-        party_type = ContentType.objects.get_for_model(AnalyticAxis)
-        data["party_type"] = party_type
+        if 'ledgers' in settings.INSTALLED_APPS:
+            from ledger.models import AnalyticAxis
+            party_type = ContentType.objects.get_for_model(AnalyticAxis)
+            data["party_type"] = party_type
         status, subject_id, subject_type = cls._get_field_for_detail(data)
         payment_invoice = cls.create_object(user=user, object_data=data)
         if payment_invoice:

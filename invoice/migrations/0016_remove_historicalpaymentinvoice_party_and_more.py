@@ -35,11 +35,11 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='historicalpaymentinvoice',
             name='payment_destination',
-            field=models.UUIDField(blank=True, db_column='PaymentDestinationID', null=True, verbose_name=django.db.models.deletion.DO_NOTHING),
+            field=models.UUIDField(blank=True, db_column='PaymentDestinationID', null=True),
         ),
         migrations.AddField(
             model_name='paymentinvoice',
             name='payment_destination',
-            field=models.UUIDField(blank=True, db_column='PaymentDestinationID', null=True, verbose_name=django.db.models.deletion.DO_NOTHING),
+            field=models.UUIDField(blank=True, db_column='PaymentDestinationID', null=True),
         )
     ]
