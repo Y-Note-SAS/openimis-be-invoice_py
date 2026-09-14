@@ -9,6 +9,7 @@ from invoice.apps import InvoiceConfig
 from django.utils.translation import gettext as _
 # Create your models here.
 from invoice.mixins import GenericInvoiceQuerysetMixin, GenericInvoiceManager
+from ledger.models import LedgerJournal
 
 
 def get_default_currency():
@@ -336,6 +337,25 @@ class PaymentInvoice(GenericInvoiceQuerysetMixin, HistoryModel):
     payment_origin = models.CharField(db_column='PaymentOrigin', max_length=255,  blank=True, null=True)
 
     payer_ref = models.CharField(db_column='PayerRef', max_length=255)
+
+    payment_destination = models.ForeignKey(
+        LedgerJournal,
+        models.DO_NOTHING,
+        db_column='PaymentDestinationID',
+        null=True,
+        blank=True
+    )
+
+    party_type = models.ForeignKey(ContentType, models.DO_NOTHING,
+        db_column='PartyType', null=True,blank=True,
+        related_name='party_type_invoice_payment', unique=False)
+
+    party_id = models.CharField(
+        db_column='PartyId', max_length=255,
+        blank=True, null=True)  # object is referenced by uuid
+
+    party = GenericForeignKey('party_type', 'party_id')
+
     payer_name = models.CharField(db_column='PayerName', max_length=255,  blank=True, null=True)
 
     objects = GenericInvoiceManager()

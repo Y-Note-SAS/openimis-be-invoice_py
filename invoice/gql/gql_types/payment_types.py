@@ -14,6 +14,29 @@ from django.core.exceptions import PermissionDenied
 
 
 class PaymentInvoiceGQLType(DjangoObjectType, GenericFilterGQLTypeMixin):
+    party_type = graphene.Int()
+    party_type_name = graphene.String()
+    party = graphene.JSONString()
+
+    def resolve_party_type(root, info):
+        if root.party_type:
+            return root.party_type.id
+
+    def resolve_party_type_name(root, info):
+        print("party_type ", root.party_type)
+        if root.party_type:
+            return root.party_type.name
+
+    def resolve_party(root, info):
+        if root.party_type:
+            thirdparty_object_dict = root.party.__dict__
+
+            thirdparty_object_dict.pop('_state', None)
+            thirdparty_object_dict = {
+                underscore_to_camel(k): v for k, v in list(thirdparty_object_dict.items())
+            }
+            thirdparty_object_dict = json.dumps(thirdparty_object_dict, cls=DjangoJSONEncoder)
+            return thirdparty_object_dict
 
     class Meta:
         model = PaymentInvoice
