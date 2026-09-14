@@ -66,7 +66,7 @@ class CreatePaymentInvoiceWithDetailMutation(BaseHistoryModelCreateMutationMixin
             data.pop('client_mutation_id')
         if "client_mutation_label" in data:
             data.pop('client_mutation_label')
-        if 'ledgers' in settings.INSTALLED_APPS:
+        if 'ledger' in settings.INSTALLED_APPS:
             from ledger.models import AnalyticAxis
             party_type = ContentType.objects.get_for_model(AnalyticAxis)
             data["party_type"] = party_type
