@@ -9,7 +9,6 @@ from invoice.apps import InvoiceConfig
 from django.utils.translation import gettext as _
 # Create your models here.
 from invoice.mixins import GenericInvoiceQuerysetMixin, GenericInvoiceManager
-from ledger.models import LedgerJournal
 
 
 def get_default_currency():
@@ -338,8 +337,7 @@ class PaymentInvoice(GenericInvoiceQuerysetMixin, HistoryModel):
 
     payer_ref = models.CharField(db_column='PayerRef', max_length=255)
 
-    payment_destination = models.ForeignKey(
-        LedgerJournal,
+    payment_destination = models.UUIDField(
         models.DO_NOTHING,
         db_column='PaymentDestinationID',
         null=True,

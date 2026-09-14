@@ -35,11 +35,11 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='historicalpaymentinvoice',
             name='payment_destination',
-            field=models.ForeignKey(blank=True, db_column='PaymentDestinationID', db_constraint=False, null=True, on_delete=django.db.models.deletion.DO_NOTHING, related_name='+', to='ledger.ledgerjournal'),
+            field=models.UUIDField(blank=True, db_column='PaymentDestinationID', null=True, verbose_name=django.db.models.deletion.DO_NOTHING),
         ),
         migrations.AddField(
             model_name='paymentinvoice',
             name='payment_destination',
-            field=models.ForeignKey(blank=True, db_column='PaymentDestinationID', null=True, on_delete=django.db.models.deletion.DO_NOTHING, to='ledger.ledgerjournal'),
+            field=models.UUIDField(blank=True, db_column='PaymentDestinationID', null=True, verbose_name=django.db.models.deletion.DO_NOTHING),
         )
     ]

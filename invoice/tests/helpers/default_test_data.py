@@ -107,7 +107,8 @@ DEFAULT_TEST_PAYMENT_INVOICE_PAYLOAD = {
     'date_payment': date(2022, 4, 11),
     'payment_origin': 'payment origin',
     'payer_ref': 'payment reference',
-    'payer_name': 'payer name'
+    'payer_name': 'payer name',
+    'payment_destination': '01a09065-d5ca-7e3a-83ad-35818fb43250'
 }
 
 DEFAULT_TEST_DETAIL_PAYMENT_INVOICE_PAYLOAD = {
