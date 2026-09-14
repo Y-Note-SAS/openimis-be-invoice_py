@@ -3,7 +3,6 @@ import graphene
 
 from django.core.serializers.json import DjangoJSONEncoder
 from graphene_django import DjangoObjectType
-
 from core import prefix_filterset, ExtendedConnection
 from invoice.apps import InvoiceConfig
 from invoice.gql.filter_mixin import GenericFilterGQLTypeMixin
