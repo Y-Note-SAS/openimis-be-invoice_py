@@ -22,6 +22,7 @@ from invoice.models import (
     DetailPaymentInvoice
 )
 from django.conf import settings
+from core.signals import register_service_signal
 
 
 class CreatePaymentInvoiceMutation(BaseHistoryModelCreateMutationMixin, BaseMutation):
@@ -88,6 +89,7 @@ class CreatePaymentInvoiceWithDetailMutation(BaseHistoryModelCreateMutationMixin
         return status, subject_id, subject_type
 
     @classmethod
+    @register_service_signal('signal_after_payment_detail_received')
     def _create_payment_detail(cls, user, data, payment, status, subject_id, subject_type):
         payment_detail = cls._build_payment_detail(data, payment, status, subject_id, subject_type)
         detail_payment_invoice = DetailPaymentInvoice(**payment_detail)

@@ -20,7 +20,7 @@ class PaymentInvoiceGQLType(DjangoObjectType, GenericFilterGQLTypeMixin):
     payment_destination = graphene.Field(
         'ledger.gql_queries.LedgerJournalGQLType',
         required=False
-    ) if 'ledgers' in settings.INSTALLED_APPS else graphene.String()
+    ) if 'ledger' in settings.INSTALLED_APPS else graphene.String()
 
     def resolve_party_type(root, info):
         if root.party_type:
@@ -44,7 +44,7 @@ class PaymentInvoiceGQLType(DjangoObjectType, GenericFilterGQLTypeMixin):
 
     def resolve_payment_destination(self, info):
         # Renvoie l'UUID stocké, qu'il y ait FK ou non
-        if 'ledgers' in settings.INSTALLED_APPS:
+        if 'ledger' in settings.INSTALLED_APPS:
             from ledger.models import LedgerJournal
             try:
                 return LedgerJournal.objects.get(pk=self.payment_destination)
