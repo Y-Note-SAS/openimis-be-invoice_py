@@ -101,6 +101,8 @@ class CreatePaymentInvoiceInputType(OpenIMISMutation.Input):
     date_valid_from = graphene.Date(required=False)
     date_valid_to = graphene.Date(required=False)
     json_ext = graphene.types.json.JSONString(required=False)
+    party_id = graphene.UUID(required=False)
+    payment_destination = graphene.UUID(required=False)
 
 
 class CreatePaymentInvoiceWithDetailInputType(CreatePaymentInvoiceInputType):

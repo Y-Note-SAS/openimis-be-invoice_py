@@ -3,7 +3,6 @@ import graphene
 
 from django.core.serializers.json import DjangoJSONEncoder
 from graphene_django import DjangoObjectType
-
 from core import prefix_filterset, ExtendedConnection
 from invoice.apps import InvoiceConfig
 from invoice.gql.filter_mixin import GenericFilterGQLTypeMixin
@@ -11,9 +10,49 @@ from invoice.models import PaymentInvoice, DetailPaymentInvoice
 from invoice.utils import underscore_to_camel
 from django.utils.translation import gettext as _
 from django.core.exceptions import PermissionDenied
+from django.conf import settings
 
 
 class PaymentInvoiceGQLType(DjangoObjectType, GenericFilterGQLTypeMixin):
+    party_type = graphene.Int()
+    party_type_name = graphene.String()
+    party = graphene.JSONString()
+    payment_destination = graphene.Field(
+        'ledger.gql_queries.LedgerJournalGQLType',
+        required=False
+    ) if 'ledger' in settings.INSTALLED_APPS else graphene.String()
+
+    def resolve_party_type(root, info):
+        if root.party_type:
+            return root.party_type.id
+
+    def resolve_party_type_name(root, info):
+        if root.party_type:
+            return root.party_type.name
+
+    def resolve_party(root, info):
+        if root.party_type and root.party:
+            thirdparty_object_dict = root.party.__dict__.copy()
+            thirdparty_object_dict.pop('_state', None)
+
+            cleaned_dict = {
+                underscore_to_camel(k): v for k, v in thirdparty_object_dict.items()
+            }
+            return json.loads(json.dumps(cleaned_dict, cls=DjangoJSONEncoder))
+
+        return None
+
+    def resolve_payment_destination(self, info):
+        # Renvoie l'UUID stocké, qu'il y ait FK ou non
+        if 'ledger' in settings.INSTALLED_APPS:
+            from ledger.models import LedgerJournal
+            try:
+                return LedgerJournal.objects.get(pk=self.payment_destination)
+            except LedgerJournal.DoesNotExist:
+                return None
+        if self.payment_destination:
+            return str(self.payment_destination)
+        return None
 
     class Meta:
         model = PaymentInvoice
@@ -21,6 +60,7 @@ class PaymentInvoiceGQLType(DjangoObjectType, GenericFilterGQLTypeMixin):
         filter_fields = {
             **GenericFilterGQLTypeMixin.get_base_filters_payment_invoice(),
         }
+        exclude_fields = ('payment_destination',)
 
         connection_class = ExtendedConnection
 
