@@ -68,9 +68,14 @@ class CreatePaymentInvoiceWithDetailMutation(BaseHistoryModelCreateMutationMixin
         if "client_mutation_label" in data:
             data.pop('client_mutation_label')
         if 'ledger' in settings.INSTALLED_APPS:
-            from ledger.models import AnalyticValue
-            party_type = ContentType.objects.get_for_model(AnalyticValue)
-            data["party_type"] = party_type
+            if data.get("party_id", None):
+                from ledger.models import AnalyticValue
+                party_type = ContentType.objects.get_for_model(AnalyticValue)
+                data["party_type"] = party_type
+            if data.get("payment_destination_id", None):
+                from ledger.models import LedgerJournal
+                payment_destination_type = ContentType.objects.get_for_model(LedgerJournal)
+                data["payment_destination_type"] = payment_destination_type
         status, subject_id, subject_type = cls._get_field_for_detail(data)
         payment_invoice = cls.create_object(user=user, object_data=data)
         if payment_invoice:

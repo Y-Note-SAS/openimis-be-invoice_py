@@ -337,11 +337,15 @@ class PaymentInvoice(GenericInvoiceQuerysetMixin, HistoryModel):
 
     payer_ref = models.CharField(db_column='PayerRef', max_length=255)
 
-    payment_destination = models.UUIDField(
-        db_column='PaymentDestinationID',
-        null=True,
-        blank=True
+    payment_destination_type = models.ForeignKey(
+        ContentType, models.DO_NOTHING,
+        db_column='PaymentDestinationType', null=True,blank=True,
+        related_name='payment_destination_type_invoice_payment', unique=False
     )
+    payment_destination_id = models.CharField(
+            db_column='PaymentDestinationId', max_length=255,
+            blank=True, null=True
+    )  # object is referenced by uuid
 
     party_type = models.ForeignKey(ContentType, models.DO_NOTHING,
         db_column='PartyType', null=True,blank=True,
@@ -352,6 +356,8 @@ class PaymentInvoice(GenericInvoiceQuerysetMixin, HistoryModel):
         blank=True, null=True)  # object is referenced by uuid
 
     party = GenericForeignKey('party_type', 'party_id')
+
+    payment_destination = GenericForeignKey('payment_destination_type', 'payment_destination_id')
 
     payer_name = models.CharField(db_column='PayerName', max_length=255,  blank=True, null=True)
 
