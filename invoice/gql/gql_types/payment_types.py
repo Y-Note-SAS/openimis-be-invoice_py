@@ -8,9 +8,9 @@ from invoice.apps import InvoiceConfig
 from invoice.gql.filter_mixin import GenericFilterGQLTypeMixin
 from invoice.models import PaymentInvoice, DetailPaymentInvoice
 from invoice.utils import underscore_to_camel
+from django.forms.models import model_to_dict
 from django.utils.translation import gettext as _
 from django.core.exceptions import PermissionDenied
-from django.conf import settings
 
 
 class PaymentInvoiceGQLType(DjangoObjectType, GenericFilterGQLTypeMixin):
@@ -31,13 +31,15 @@ class PaymentInvoiceGQLType(DjangoObjectType, GenericFilterGQLTypeMixin):
 
     def resolve_party(root, info):
         if root.party_type and root.party:
-            thirdparty_object_dict = root.party.__dict__.copy()
-            thirdparty_object_dict.pop('_state', None)
-
-            cleaned_dict = {
-                underscore_to_camel(k): v for k, v in thirdparty_object_dict.items()
+            data = model_to_dict(root.party)
+            cleaned_data = {
+                underscore_to_camel(k): v
+                for k, v in data.items()
             }
-            return json.loads(json.dumps(cleaned_dict, cls=DjangoJSONEncoder))
+
+            return json.loads(
+                json.dumps(cleaned_data, cls=DjangoJSONEncoder)
+            )
 
         return None
 
@@ -51,13 +53,16 @@ class PaymentInvoiceGQLType(DjangoObjectType, GenericFilterGQLTypeMixin):
 
     def resolve_payment_destination(root, info):
         if root.payment_destination_type and root.payment_destination:
-            payment_destination_object_dict = root.payment_destination.__dict__.copy()
-            payment_destination_object_dict.pop('_state', None)
+            data = model_to_dict(root.payment_destination)
 
-            cleaned_dict = {
-                underscore_to_camel(k): v for k, v in payment_destination_object_dict.items()
+            cleaned_data = {
+                underscore_to_camel(k): v
+                for k, v in data.items()
             }
-            return json.loads(json.dumps(cleaned_dict, cls=DjangoJSONEncoder))
+
+            return json.loads(
+                json.dumps(cleaned_data, cls=DjangoJSONEncoder)
+            )
 
         return None
 
