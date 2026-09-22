@@ -16,6 +16,7 @@ from invoice.tests.helpers import (
 )
 from django.conf import settings
 from core.test_helpers import create_test_interactive_user
+from django.contrib.contenttypes.models import ContentType
 
 
 class PaymentInvoiceGQLTest(InvoiceGQLTestCase):
@@ -289,8 +290,25 @@ mutation {{
         payment_invoice = PaymentInvoice.objects.filter(invoice_payments__subject_id__in=[invoice.id]).first()
         self.assertEqual(obj, expected)
         self.assertEqual(obj, payment_invoice)
-        output = self.graph_client.execute(self.search_payment_invoice_detail_query,
-                                                   context=self.user_context.get_request())
+        if 'ledger' in settings.INSTALLED_APPS:
+            output = self.graph_client.execute(self.search_payment_invoice_detail_query,
+                                               context=self.user_context.get_request())
+            self.assertEqual(
+                output["data"]["paymentInvoice"]["edges"][0]["node"]["paymentDestinationId"],
+                str(payment_destination.id)
+            )
+            self.assertEqual(
+                output["data"]["paymentInvoice"]["edges"][0]["node"]["paymentDestinationType"],
+                str(ContentType.objects.get_for_model(LedgerJournal))
+            )
+            self.assertEqual(
+                output["data"]["paymentInvoice"]["edges"][0]["node"]["partyId"],
+                str(party.id)
+            )
+            self.assertEqual(
+                output["data"]["paymentInvoice"]["edges"][0]["node"]["partyType"],
+                str(ContentType.objects.get_for_model(AnalyticValue))
+            )
         InvoiceLineItem.objects.filter(id=invoice_item.id).delete()
         Invoice.objects.filter(id=invoice.id).delete()
 
