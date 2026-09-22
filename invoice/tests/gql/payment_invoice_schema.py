@@ -298,7 +298,7 @@ mutation {{
                 str(payment_destination.id)
             )
             self.assertEqual(
-                output["data"]["paymentInvoice"]["edges"][0]["node"]["paymentDestinationType"],
+                str(output["data"]["paymentInvoice"]["edges"][0]["node"]["paymentDestinationType"]),
                 str(ContentType.objects.get_for_model(LedgerJournal).id)
             )
             self.assertEqual(
@@ -306,7 +306,7 @@ mutation {{
                 str(party.id)
             )
             self.assertEqual(
-                output["data"]["paymentInvoice"]["edges"][0]["node"]["partyType"],
+                str(output["data"]["paymentInvoice"]["edges"][0]["node"]["partyType"]),
                 str(ContentType.objects.get_for_model(AnalyticValue).id)
             )
         InvoiceLineItem.objects.filter(id=invoice_item.id).delete()
