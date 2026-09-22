@@ -82,15 +82,7 @@ query {{
         datePayment,
         reconciliationStatus,
         fees,
-        payerRef,
-        paymentDestinationType
-        paymentDestinationTypeName
-        paymentDestinationId
-        paymentDestination
-        partyTypeName
-        partyType
-        partyId
-        party
+        payerRef
         invoicePayments{{
           totalCount
           edges{{
@@ -107,6 +99,45 @@ query {{
     }}
 }}
 '''
+
+    search_payment_invoice_detail_query = F'''
+    query {{ 
+        paymentInvoice(codeTp_Iexact:"{DEFAULT_TEST_PAYMENT_INVOICE_PAYLOAD['code_tp']}", 
+        amountReceived: "{DEFAULT_TEST_PAYMENT_INVOICE_PAYLOAD['amount_received']}"){{
+        edges {{
+            node {{
+            isDeleted,
+            codeTp,
+            codeExt,
+            amountReceived,
+            datePayment,
+            reconciliationStatus,
+            fees,
+            payerRef,
+            paymentDestinationType
+            paymentDestinationTypeName
+            paymentDestinationId
+            paymentDestination
+            partyTypeName
+            partyType
+            partyId
+            party
+            invoicePayments{{
+              totalCount
+              edges{{
+                node{{
+                  subjectTypeName
+                  fees
+                  amount
+                  status
+                }}
+              }}
+            }}
+            }}
+        }}
+        }}
+    }}
+    '''
 
     create_mutation_with_detail_str = '''  
 mutation {{
@@ -259,6 +290,9 @@ mutation {{
         payment_invoice = PaymentInvoice.objects.filter(invoice_payments__subject_id__in=[invoice.id]).first()
         self.assertEqual(obj, expected)
         self.assertEqual(obj, payment_invoice)
+        output = self.graph_client.execute(self.search_payment_invoice_detail_query,
+                                                   context=self.user_context.get_request())
+        print("output2: ", output)
         InvoiceLineItem.objects.filter(id=invoice_item.id).delete()
         Invoice.objects.filter(id=invoice.id).delete()
 
