@@ -91,6 +91,14 @@ query {{
               fees
               amount
               status
+              paymentDestinationType
+              paymentDestinationTypeName
+              paymentDestinationId
+              paymentDestination
+              partyTypeName
+              partyType
+              partyId
+              party
             }}
           }}
         }}
