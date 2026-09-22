@@ -141,7 +141,7 @@ query {{
 
     create_mutation_with_detail_str = '''  
 mutation {{
-    createPaymentWithDetailInvoice(input:{{status: 1, subjectId: "{invoice_uuid}", subjectType: "invoice"
+    createPaymentWithDetailInvoice(input:{{status: 1, subjectId: "{invoice_uuid}", subjectType: "invoice",
     reconciliationStatus: 1, codeExt:"{payment_code}", codeTp:"PAY_CODE", codeReceipt:"gqlRec", 
     label:"gql label", fees: "12.00", amountReceived: "91.50", payerRef: "payerRef", 
     datePayment:"2022-04-12", clientMutationId: "{mutation_id}"}}) {{
@@ -191,7 +191,6 @@ mutation {{
         payment = create_test_payment_invoice_with_details()
         output = self.graph_client.execute(self.search_for_payment_invoice_with_detail_query,
                                            context=self.user_context.get_request())
-        print("output ", output)
         expected = \
             {'data': {
                 'paymentInvoice': {
@@ -292,7 +291,6 @@ mutation {{
         self.assertEqual(obj, payment_invoice)
         output = self.graph_client.execute(self.search_payment_invoice_detail_query,
                                                    context=self.user_context.get_request())
-        print("output2: ", output)
         InvoiceLineItem.objects.filter(id=invoice_item.id).delete()
         Invoice.objects.filter(id=invoice.id).delete()
 
