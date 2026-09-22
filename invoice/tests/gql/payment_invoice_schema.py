@@ -153,7 +153,7 @@ mutation {{
     if 'ledger' in settings.INSTALLED_APPS:
         create_mutation_with_detail_str = '''
         mutation {{
-            createPaymentWithDetailInvoice(input:{{status: 1, subjectId: "{invoice_uuid}", paymentDestinationId: "{payment_destination_uuid}", partyId:"{party_uuid}", subjectType: "invoice"
+            createPaymentWithDetailInvoice(input:{{status: 1, subjectId: "{invoice_uuid}", paymentDestinationId: "{payment_destination_uuid}", partyId:"{party_uuid}", subjectType: "invoice",
             reconciliationStatus: 1, codeExt:"{payment_code}", codeTp:"PAY_CODE", codeReceipt:"gqlRec", 
             label:"gql label", fees: "12.00", amountReceived: "91.50", payerRef: "payerRef", 
             datePayment:"2022-04-12", clientMutationId: "{mutation_id}"}}) {{
