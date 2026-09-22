@@ -299,7 +299,7 @@ mutation {{
             )
             self.assertEqual(
                 output["data"]["paymentInvoice"]["edges"][0]["node"]["paymentDestinationType"],
-                str(ContentType.objects.get_for_model(LedgerJournal))
+                str(ContentType.objects.get_for_model(LedgerJournal).id)
             )
             self.assertEqual(
                 output["data"]["paymentInvoice"]["edges"][0]["node"]["partyId"],
@@ -307,7 +307,7 @@ mutation {{
             )
             self.assertEqual(
                 output["data"]["paymentInvoice"]["edges"][0]["node"]["partyType"],
-                str(ContentType.objects.get_for_model(AnalyticValue))
+                str(ContentType.objects.get_for_model(AnalyticValue).id)
             )
         InvoiceLineItem.objects.filter(id=invoice_item.id).delete()
         Invoice.objects.filter(id=invoice.id).delete()
