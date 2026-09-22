@@ -83,6 +83,14 @@ query {{
         reconciliationStatus,
         fees,
         payerRef,
+        paymentDestinationType
+        paymentDestinationTypeName
+        paymentDestinationId
+        paymentDestination
+        partyTypeName
+        partyType
+        partyId
+        party
         invoicePayments{{
           totalCount
           edges{{
@@ -91,14 +99,6 @@ query {{
               fees
               amount
               status
-              paymentDestinationType
-              paymentDestinationTypeName
-              paymentDestinationId
-              paymentDestination
-              partyTypeName
-              partyType
-              partyId
-              party
             }}
           }}
         }}
