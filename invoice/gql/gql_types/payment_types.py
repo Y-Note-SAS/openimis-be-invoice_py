@@ -3,17 +3,68 @@ import graphene
 
 from django.core.serializers.json import DjangoJSONEncoder
 from graphene_django import DjangoObjectType
-
 from core import prefix_filterset, ExtendedConnection
 from invoice.apps import InvoiceConfig
 from invoice.gql.filter_mixin import GenericFilterGQLTypeMixin
 from invoice.models import PaymentInvoice, DetailPaymentInvoice
 from invoice.utils import underscore_to_camel
+from django.forms.models import model_to_dict
 from django.utils.translation import gettext as _
 from django.core.exceptions import PermissionDenied
 
 
 class PaymentInvoiceGQLType(DjangoObjectType, GenericFilterGQLTypeMixin):
+    party_type = graphene.Int()
+    party_type_name = graphene.String()
+    party = graphene.JSONString()
+    payment_destination_type = graphene.Int()
+    payment_destination_type_name = graphene.String()
+    payment_destination = graphene.JSONString()
+
+    def resolve_party_type(root, info):
+        if root.party_type:
+            return root.party_type.id
+
+    def resolve_party_type_name(root, info):
+        if root.party_type:
+            return root.party_type.name
+
+    def resolve_party(root, info):
+        if root.party_type and root.party:
+            data = model_to_dict(root.party)
+            cleaned_data = {
+                underscore_to_camel(k): v
+                for k, v in data.items()
+            }
+
+            return json.loads(
+                json.dumps(cleaned_data, cls=DjangoJSONEncoder)
+            )
+
+        return None
+
+    def resolve_payment_destination_type(root, info):
+        if root.payment_destination_type:
+            return root.payment_destination_type.id
+
+    def resolve_payment_destination_type_name(root, info):
+        if root.payment_destination_type:
+            return root.payment_destination_type.name
+
+    def resolve_payment_destination(root, info):
+        if root.payment_destination_type and root.payment_destination:
+            data = model_to_dict(root.payment_destination)
+
+            cleaned_data = {
+                underscore_to_camel(k): v
+                for k, v in data.items()
+            }
+
+            return json.loads(
+                json.dumps(cleaned_data, cls=DjangoJSONEncoder)
+            )
+
+        return None
 
     class Meta:
         model = PaymentInvoice

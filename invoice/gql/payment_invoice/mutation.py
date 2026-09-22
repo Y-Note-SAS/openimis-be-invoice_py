@@ -21,6 +21,8 @@ from invoice.models import (
     PaymentInvoiceMutation,
     DetailPaymentInvoice
 )
+from django.conf import settings
+from core.signals import register_service_signal
 
 
 class CreatePaymentInvoiceMutation(BaseHistoryModelCreateMutationMixin, BaseMutation):
@@ -65,6 +67,15 @@ class CreatePaymentInvoiceWithDetailMutation(BaseHistoryModelCreateMutationMixin
             data.pop('client_mutation_id')
         if "client_mutation_label" in data:
             data.pop('client_mutation_label')
+        if 'ledger' in settings.INSTALLED_APPS:
+            if data.get("party_id", None):
+                from ledger.models import AnalyticValue
+                party_type = ContentType.objects.get_for_model(AnalyticValue)
+                data["party_type"] = party_type
+            if data.get("payment_destination_id", None):
+                from ledger.models import LedgerJournal
+                payment_destination_type = ContentType.objects.get_for_model(LedgerJournal)
+                data["payment_destination_type"] = payment_destination_type
         status, subject_id, subject_type = cls._get_field_for_detail(data)
         payment_invoice = cls.create_object(user=user, object_data=data)
         if payment_invoice:
@@ -83,6 +94,7 @@ class CreatePaymentInvoiceWithDetailMutation(BaseHistoryModelCreateMutationMixin
         return status, subject_id, subject_type
 
     @classmethod
+    @register_service_signal('signal_after_payment_detail_received')
     def _create_payment_detail(cls, user, data, payment, status, subject_id, subject_type):
         payment_detail = cls._build_payment_detail(data, payment, status, subject_id, subject_type)
         detail_payment_invoice = DetailPaymentInvoice(**payment_detail)

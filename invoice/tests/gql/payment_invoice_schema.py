@@ -14,6 +14,9 @@ from invoice.tests.helpers import (
     create_test_invoice_line_item,
     create_test_payment_invoice_with_details,
 )
+from django.conf import settings
+from core.test_helpers import create_test_interactive_user
+from django.contrib.contenttypes.models import ContentType
 
 
 class PaymentInvoiceGQLTest(InvoiceGQLTestCase):
@@ -80,7 +83,7 @@ query {{
         datePayment,
         reconciliationStatus,
         fees,
-        payerRef,
+        payerRef
         invoicePayments{{
           totalCount
           edges{{
@@ -98,9 +101,48 @@ query {{
 }}
 '''
 
+    search_payment_invoice_detail_query = F'''
+    query {{ 
+        paymentInvoice(codeTp_Iexact:"{DEFAULT_TEST_PAYMENT_INVOICE_PAYLOAD['code_tp']}", 
+        amountReceived: "{DEFAULT_TEST_PAYMENT_INVOICE_PAYLOAD['amount_received']}"){{
+        edges {{
+            node {{
+            isDeleted,
+            codeTp,
+            codeExt,
+            amountReceived,
+            datePayment,
+            reconciliationStatus,
+            fees,
+            payerRef,
+            paymentDestinationType
+            paymentDestinationTypeName
+            paymentDestinationId
+            paymentDestination
+            partyTypeName
+            partyType
+            partyId
+            party
+            invoicePayments{{
+              totalCount
+              edges{{
+                node{{
+                  subjectTypeName
+                  fees
+                  amount
+                  status
+                }}
+              }}
+            }}
+            }}
+        }}
+        }}
+    }}
+    '''
+
     create_mutation_with_detail_str = '''  
 mutation {{
-    createPaymentWithDetailInvoice(input:{{status: 1, subjectId: "{invoice_uuid}", subjectType: "invoice"
+    createPaymentWithDetailInvoice(input:{{status: 1, subjectId: "{invoice_uuid}", subjectType: "invoice",
     reconciliationStatus: 1, codeExt:"{payment_code}", codeTp:"PAY_CODE", codeReceipt:"gqlRec", 
     label:"gql label", fees: "12.00", amountReceived: "91.50", payerRef: "payerRef", 
     datePayment:"2022-04-12", clientMutationId: "{mutation_id}"}}) {{
@@ -109,7 +151,18 @@ mutation {{
     }}
 }}
 '''
-
+    if 'ledger' in settings.INSTALLED_APPS:
+        create_mutation_with_detail_str = '''
+        mutation {{
+            createPaymentWithDetailInvoice(input:{{status: 1, subjectId: "{invoice_uuid}", paymentDestinationId: "{payment_destination_uuid}", partyId:"{party_uuid}", subjectType: "invoice",
+            reconciliationStatus: 1, codeExt:"{payment_code}", codeTp:"PAY_CODE", codeReceipt:"gqlRec", 
+            label:"gql label", fees: "12.00", amountReceived: "91.50", payerRef: "payerRef", 
+            datePayment:"2022-04-12", clientMutationId: "{mutation_id}"}}) {{
+                internalId
+                clientMutationId
+            }}
+        }}
+        '''
     def test_fetch_payment_invoice_query(self):
         payment_code = "GQLCOD"
         mutation_client_id = str(uuid.uuid4())
@@ -185,9 +238,51 @@ mutation {{
         invoice_item = create_test_invoice_line_item(invoice)
         payment_code = "GQLCOD"
         mutation_client_id = str(uuid.uuid4())
-        mutation = self.create_mutation_with_detail_str.format(
-            payment_code=payment_code, mutation_id=mutation_client_id, invoice_uuid=invoice.id
-        )
+        if 'ledger' not in settings.INSTALLED_APPS:
+            mutation = self.create_mutation_with_detail_str.format(
+                payment_code=payment_code, mutation_id=mutation_client_id, invoice_uuid=invoice.id
+            )
+        if 'ledger' in settings.INSTALLED_APPS:
+            from ledger.models import LedgerJournal, AnalyticValue, AnalyticAxis
+            from hordak.models import Account
+            user = create_test_interactive_user()
+
+            cash_account = Account.objects.create(
+                code="1001",
+                full_code="1001",
+                name="Cash",
+            )
+            expense_account = Account.objects.create(
+                code="6001",
+                full_code="6001",
+                name="Expense",
+            )
+
+            payment_destination = LedgerJournal(
+                code="GENERAL",
+                name="General Journal",
+                default_credit_account_id=cash_account,
+                default_debit_account_id=expense_account,
+            )
+            payment_destination.save(username=user.username)
+
+            axis = AnalyticAxis(
+                code=AnalyticAxis.PARTY,
+                name="Party",
+            )
+            axis.save(username=user.username)
+            party = AnalyticValue(
+                axis=axis,
+                party_type=AnalyticValue.PARTY_HEALTH_FACILITY,
+                external_reference="HF001",
+                display_name="Health Facility 001",
+            )
+            party.save(username=user.username)
+
+            mutation = self.create_mutation_with_detail_str.format(
+                payment_code=payment_code, mutation_id=mutation_client_id, invoice_uuid=invoice.id,
+                payment_destination_uuid=payment_destination.id, party_uuid=party.id
+            )
         self.graph_client.execute(mutation, context=self.user_context.get_request())
         expected = PaymentInvoice.objects.get(code_ext=payment_code)
         mutation_log = MutationLog.objects.filter(client_mutation_id=mutation_client_id).first()
@@ -195,6 +290,25 @@ mutation {{
         payment_invoice = PaymentInvoice.objects.filter(invoice_payments__subject_id__in=[invoice.id]).first()
         self.assertEqual(obj, expected)
         self.assertEqual(obj, payment_invoice)
+        if 'ledger' in settings.INSTALLED_APPS:
+            output = self.graph_client.execute(self.search_payment_invoice_detail_query,
+                                               context=self.user_context.get_request())
+            self.assertEqual(
+                output["data"]["paymentInvoice"]["edges"][0]["node"]["paymentDestinationId"],
+                str(payment_destination.id)
+            )
+            self.assertEqual(
+                str(output["data"]["paymentInvoice"]["edges"][0]["node"]["paymentDestinationType"]),
+                str(ContentType.objects.get_for_model(LedgerJournal).id)
+            )
+            self.assertEqual(
+                output["data"]["paymentInvoice"]["edges"][0]["node"]["partyId"],
+                str(party.id)
+            )
+            self.assertEqual(
+                str(output["data"]["paymentInvoice"]["edges"][0]["node"]["partyType"]),
+                str(ContentType.objects.get_for_model(AnalyticValue).id)
+            )
         InvoiceLineItem.objects.filter(id=invoice_item.id).delete()
         Invoice.objects.filter(id=invoice.id).delete()
 
