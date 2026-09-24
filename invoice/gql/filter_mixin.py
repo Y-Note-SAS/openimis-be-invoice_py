@@ -130,6 +130,10 @@ class GenericFilterGQLTypeMixin:
 
             "is_deleted": ["exact"],
             "version": ["exact"],
+            "party_id": ["exact"],
+            "party_type": ["exact"],
+            "payment_destination_type": ["exact"],
+            "payment_destination_id": ["exact"]
         }
 
     @classmethod
