@@ -14,6 +14,8 @@ from invoice.tests.helpers import (
     create_test_invoice_line_item,
     create_test_payment_invoice_with_details,
 )
+from insuree.test_helpers import create_test_insuree
+from django.contrib.contenttypes.models import ContentType
 
 
 class PaymentInvoiceGQLTest(InvoiceGQLTestCase):
@@ -134,6 +136,68 @@ mutation {{
                             'payerRef': 'payerRef',
         }}]}}}
         self.assertEqual(output, expected)
+
+    def test_fetch_invoice_payment_query(self):
+        insuree = create_test_insuree()
+        invoice1 = create_test_invoice(
+            custom_props={
+                "subject_type": ContentType.objects.get_for_model(insuree),
+                "subject": insuree,
+                "thirdparty_type": ContentType.objects.get_for_model(insuree),
+                "thirdparty": insuree
+            }
+        )
+        invoice2 = create_test_invoice(
+            custom_props={
+                "subject_type": ContentType.objects.get_for_model(insuree),
+                "subject": insuree,
+                "thirdparty_type": ContentType.objects.get_for_model(insuree),
+                "thirdparty": insuree,
+                "is_deleted": True
+            }
+        )
+        search_for_family_invoice_payment_overview = F'''
+            query {{ 
+            familyInvoicePaymentOverview(headInsureeId: "{insuree.id}",showDeleted: true,first: 5)
+            {{
+              totalCount
+              pageInfo {{
+                hasNextPage
+                hasPreviousPage
+                startCursor
+                endCursor
+              }}
+              items {{
+                rowId
+                invoiceId
+                invoiceCode
+                coveredFrom
+                coveredTo
+                amountDue
+                totalInvoicePayments
+                invoiceBalance
+                lastPayment
+                hasInvoicePayments
+              }}
+            }}
+            }}
+        '''
+        output = self.graph_client.execute(search_for_family_invoice_payment_overview,
+                                            context=self.BaseTestContext(self.user))
+        print("output is: ", output)
+
+        search_for_family_invoice_payment_global = F'''
+            query {{
+                familyInvoicePaymentGlobals(headInsureeId: "{insuree.id}",showDeleted: true) {{
+                totalInvoiceAmount
+                totalPaidAmount
+                globalBalance
+            }}
+        }}
+        '''
+        output2 = self.graph_client.execute(search_for_family_invoice_payment_global,
+                                                    context=self.BaseTestContext(self.user))
+        print("output2 is: ", output2)
 
     def test_fetch_payment_invoice_with_detail_query(self):
         payment = create_test_payment_invoice_with_details()
