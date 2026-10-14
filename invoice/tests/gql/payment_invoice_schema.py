@@ -140,21 +140,10 @@ mutation {{
     def test_fetch_invoice_payment_query(self):
         insuree = create_test_insuree()
         invoice1 = create_test_invoice(
-            custom_props={
-                "subject_type": ContentType.objects.get_for_model(insuree),
-                "subject": insuree,
-                "thirdparty_type": ContentType.objects.get_for_model(insuree),
-                "thirdparty": insuree
-            }
+            subject=insuree, thirdparty=insuree, user=None
         )
         invoice2 = create_test_invoice(
-            custom_props={
-                "subject_type": ContentType.objects.get_for_model(insuree),
-                "subject": insuree,
-                "thirdparty_type": ContentType.objects.get_for_model(insuree),
-                "thirdparty": insuree,
-                "is_deleted": True
-            }
+            subject=insuree, thirdparty=insuree, user=None
         )
         search_for_family_invoice_payment_overview = F'''
             query {{ 
