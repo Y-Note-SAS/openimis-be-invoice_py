@@ -195,6 +195,7 @@ mutation {{
         print("output2 is: ", output2)
         globals_data = output2['data']['familyInvoicePaymentGlobals']
         self.assertEqual(len(globals_data), 3)
+        self.assertEqual(float(globals_data["globalBalance"]), 20.10)
 
         search_for_family_invoice_payment_overview_deleted_true = F'''
             query {{
@@ -244,7 +245,8 @@ mutation {{
         )
         print("output2 sd is: ", output2)
         globals_data = output2['data']['familyInvoicePaymentGlobals']
-        # self.assertEqual(len(globals_data), 3)
+        # amount has doubled because deleted invoice shows
+        self.assertEqual(float(globals_data["globalBalance"]), 40.20)
 
     def test_fetch_payment_invoice_with_detail_query(self):
         payment = create_test_payment_invoice_with_details()
