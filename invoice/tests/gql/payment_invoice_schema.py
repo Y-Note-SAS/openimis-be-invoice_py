@@ -196,6 +196,56 @@ mutation {{
         globals_data = output2['data']['familyInvoicePaymentGlobals']
         self.assertEqual(len(globals_data), 3)
 
+        search_for_family_invoice_payment_overview_deleted_true = F'''
+            query {{
+            familyInvoicePaymentOverview(headInsureeId: "{insuree.id}",showDeleted: true,first: 5)
+            {{
+                totalCount
+                pageInfo {{
+                hasNextPage
+                hasPreviousPage
+                startCursor
+                endCursor
+                }}
+                items {{
+                rowId
+                invoiceId
+                invoiceCode
+                coveredFrom
+                coveredTo
+                amountDue
+                totalInvoicePayments
+                invoiceBalance
+                lastPayment
+                hasInvoicePayments
+                }}
+            }}
+            }}
+        '''
+        output = self.graph_client.execute(
+            search_for_family_invoice_payment_overview_deleted_true,
+            context=self.BaseTestContext(self.user)
+        )
+        print("output sd: ", output)
+        self.assertEqual(output["data"]["familyInvoicePaymentOverview"]["totalCount"], 2)
+
+        search_for_family_invoice_payment_global_show_deleted_false = F'''
+            query {{
+                familyInvoicePaymentGlobals(headInsureeId: "{insuree.id}",showDeleted: true) {{
+                totalInvoiceAmount
+                totalPaidAmount
+                globalBalance
+            }}
+        }}
+        '''
+        output2 = self.graph_client.execute(
+            search_for_family_invoice_payment_global_show_deleted_false,
+            context=self.BaseTestContext(self.user)
+        )
+        print("output2 sd is: ", output2)
+        globals_data = output2['data']['familyInvoicePaymentGlobals']
+        # self.assertEqual(len(globals_data), 3)
+
     def test_fetch_payment_invoice_with_detail_query(self):
         payment = create_test_payment_invoice_with_details()
         output = self.graph_client.execute(self.search_for_payment_invoice_with_detail_query,
