@@ -139,15 +139,19 @@ mutation {{
 
     def test_fetch_invoice_payment_query(self):
         insuree = create_test_insuree()
-        invoice1 = create_test_invoice(
+        create_test_invoice(
             subject=insuree, thirdparty=insuree, user=None
         )
-        invoice2 = create_test_invoice(
-            subject=insuree, thirdparty=insuree, user=None
+        create_test_invoice(
+            subject=insuree, thirdparty=insuree, user=None,
+            **{
+                "code": "INVOICE_CODE_2",
+                "is_deleted": True
+            }
         )
-        search_for_family_invoice_payment_overview = F'''
-            query {{ 
-            familyInvoicePaymentOverview(headInsureeId: "{insuree.id}",showDeleted: true,first: 5)
+        search_for_family_invoice_payment_overview_deleted_false = F'''
+            query {{
+            familyInvoicePaymentOverview(headInsureeId: "{insuree.id}",showDeleted: false,first: 5)
             {{
               totalCount
               pageInfo {{
@@ -171,22 +175,26 @@ mutation {{
             }}
             }}
         '''
-        output = self.graph_client.execute(search_for_family_invoice_payment_overview,
+        output = self.graph_client.execute(search_for_family_invoice_payment_overview_deleted_false,
                                             context=self.BaseTestContext(self.user))
-        print("output is: ", output)
+        self.assertEqual(output["data"]["familyInvoicePaymentOverview"]["totalCount"], 1)
 
-        search_for_family_invoice_payment_global = F'''
+        search_for_family_invoice_payment_global_show_deleted_false = F'''
             query {{
-                familyInvoicePaymentGlobals(headInsureeId: "{insuree.id}",showDeleted: true) {{
+                familyInvoicePaymentGlobals(headInsureeId: "{insuree.id}",showDeleted: false) {{
                 totalInvoiceAmount
                 totalPaidAmount
                 globalBalance
             }}
         }}
         '''
-        output2 = self.graph_client.execute(search_for_family_invoice_payment_global,
-                                                    context=self.BaseTestContext(self.user))
+        output2 = self.graph_client.execute(
+            search_for_family_invoice_payment_global_show_deleted_false,
+            context=self.BaseTestContext(self.user)
+        )
         print("output2 is: ", output2)
+        globals_data = output2['data']['familyInvoicePaymentGlobals']
+        self.assertEqual(len(globals_data), 3)
 
     def test_fetch_payment_invoice_with_detail_query(self):
         payment = create_test_payment_invoice_with_details()
