@@ -14,6 +14,7 @@ from invoice.tests.helpers import (
     create_test_invoice_line_item,
     create_test_payment_invoice_with_details,
 )
+from insuree.test_helpers import create_test_insuree
 
 
 class PaymentInvoiceGQLTest(InvoiceGQLTestCase):
@@ -134,6 +135,114 @@ mutation {{
                             'payerRef': 'payerRef',
         }}]}}}
         self.assertEqual(output, expected)
+
+    def test_fetch_invoice_payment_query(self):
+        insuree = create_test_insuree()
+        create_test_invoice(
+            subject=insuree, thirdparty=insuree, user=None
+        )
+        create_test_invoice(
+            subject=insuree, thirdparty=insuree, user=None,
+            **{
+                "code": "INVOICE_CODE_2",
+                "is_deleted": True
+            }
+        )
+        search_for_family_invoice_payment_overview_deleted_false = F'''
+            query {{
+            familyInvoicePaymentOverview(headInsureeId: "{insuree.id}",showDeleted: false,first: 5)
+            {{
+              totalCount
+              pageInfo {{
+                hasNextPage
+                hasPreviousPage
+                startCursor
+                endCursor
+              }}
+              items {{
+                rowId
+                invoiceId
+                invoiceCode
+                coveredFrom
+                coveredTo
+                amountDue
+                totalInvoicePayments
+                invoiceBalance
+                lastPayment
+                hasInvoicePayments
+              }}
+            }}
+            }}
+        '''
+        output = self.graph_client.execute(search_for_family_invoice_payment_overview_deleted_false,
+                                            context=self.BaseTestContext(self.user))
+        self.assertEqual(output["data"]["familyInvoicePaymentOverview"]["totalCount"], 1)
+
+        search_for_family_invoice_payment_global_show_deleted_false = F'''
+            query {{
+                familyInvoicePaymentGlobals(headInsureeId: "{insuree.id}",showDeleted: false) {{
+                totalInvoiceAmount
+                totalPaidAmount
+                globalBalance
+            }}
+        }}
+        '''
+        output2 = self.graph_client.execute(
+            search_for_family_invoice_payment_global_show_deleted_false,
+            context=self.BaseTestContext(self.user)
+        )
+        globals_data = output2['data']['familyInvoicePaymentGlobals']
+        self.assertEqual(len(globals_data), 3)
+        self.assertEqual(float(globals_data["globalBalance"]), 20.10)
+
+        search_for_family_invoice_payment_overview_deleted_true = F'''
+            query {{
+            familyInvoicePaymentOverview(headInsureeId: "{insuree.id}",showDeleted: true,first: 5)
+            {{
+                totalCount
+                pageInfo {{
+                hasNextPage
+                hasPreviousPage
+                startCursor
+                endCursor
+                }}
+                items {{
+                rowId
+                invoiceId
+                invoiceCode
+                coveredFrom
+                coveredTo
+                amountDue
+                totalInvoicePayments
+                invoiceBalance
+                lastPayment
+                hasInvoicePayments
+                }}
+            }}
+            }}
+        '''
+        output = self.graph_client.execute(
+            search_for_family_invoice_payment_overview_deleted_true,
+            context=self.BaseTestContext(self.user)
+        )
+        self.assertEqual(output["data"]["familyInvoicePaymentOverview"]["totalCount"], 2)
+
+        search_for_family_invoice_payment_global_show_deleted_false = F'''
+            query {{
+                familyInvoicePaymentGlobals(headInsureeId: "{insuree.id}",showDeleted: true) {{
+                totalInvoiceAmount
+                totalPaidAmount
+                globalBalance
+            }}
+        }}
+        '''
+        output2 = self.graph_client.execute(
+            search_for_family_invoice_payment_global_show_deleted_false,
+            context=self.BaseTestContext(self.user)
+        )
+        globals_data = output2['data']['familyInvoicePaymentGlobals']
+        # amount has doubled because deleted invoice shows
+        self.assertEqual(float(globals_data["globalBalance"]), 40.20)
 
     def test_fetch_payment_invoice_with_detail_query(self):
         payment = create_test_payment_invoice_with_details()

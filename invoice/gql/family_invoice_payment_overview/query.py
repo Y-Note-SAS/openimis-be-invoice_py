@@ -67,20 +67,25 @@ class FamilyInvoicePaymentOverviewQueryMixin:
         after=graphene.String(),
         before=graphene.String(),
         last=graphene.Int(),
+        show_deleted=graphene.Boolean(),
     )
     family_invoice_payment_globals = graphene.Field(
         FamilyInvoicePaymentGlobalsGQLType,
         head_insuree_id=graphene.String(required=True),
+        show_deleted=graphene.Boolean(),
     )
 
     def resolve_family_invoice_payment_overview(self, info, **kwargs):
         FamilyInvoicePaymentOverviewQueryMixin._check_permissions(info.context.user)
 
         head_insuree_id = kwargs.get("head_insuree_id")
+        show_deleted = kwargs.get("show_deleted", False)
         if not head_insuree_id:
             return FamilyInvoicePaymentOverviewQueryMixin._empty_overview()
 
-        snapshot = FamilyInvoicePaymentOverviewQueryMixin._get_or_build_snapshot(info.context.user, head_insuree_id)
+        snapshot = FamilyInvoicePaymentOverviewQueryMixin._get_or_build_snapshot(
+            info.context.user, head_insuree_id, show_deleted
+        )
         if not snapshot:
             return FamilyInvoicePaymentOverviewQueryMixin._empty_overview()
         page_slice_start = time.perf_counter()
@@ -103,6 +108,7 @@ class FamilyInvoicePaymentOverviewQueryMixin:
         FamilyInvoicePaymentOverviewQueryMixin._check_permissions(info.context.user)
 
         head_insuree_id = kwargs.get("head_insuree_id")
+        show_deleted = kwargs.get("show_deleted", False)
         if not head_insuree_id:
             return FamilyInvoicePaymentGlobalsGQLType(
                 total_invoice_amount=Decimal("0"),
@@ -110,7 +116,9 @@ class FamilyInvoicePaymentOverviewQueryMixin:
                 global_balance=Decimal("0"),
             )
 
-        snapshot = FamilyInvoicePaymentOverviewQueryMixin._get_or_build_snapshot(info.context.user, head_insuree_id)
+        snapshot = FamilyInvoicePaymentOverviewQueryMixin._get_or_build_snapshot(
+            info.context.user, head_insuree_id, show_deleted
+        )
         if not snapshot:
             return FamilyInvoicePaymentGlobalsGQLType(
                 total_invoice_amount=Decimal("0"),
@@ -126,11 +134,11 @@ class FamilyInvoicePaymentOverviewQueryMixin:
         )
 
     @classmethod
-    def _get_or_build_snapshot(cls, user, head_insuree_id):
+    def _get_or_build_snapshot(cls, user, head_insuree_id, show_deleted):
         subject_ids = cls._normalize_head_insuree_subject_ids(head_insuree_id)
         if not subject_ids:
             return None
-        cache_key = cls._snapshot_cache_key(user, head_insuree_id, subject_ids)
+        cache_key = cls._snapshot_cache_key(user, head_insuree_id, subject_ids, show_deleted)
         if cls.SNAPSHOT_CACHE_ENABLED:
             try:
                 cached_snapshot = cache.get(cache_key)
@@ -141,7 +149,7 @@ class FamilyInvoicePaymentOverviewQueryMixin:
                 logger.exception("family_invoice_payment_snapshot cache_get_error key=%s", cache_key)
         logger.info("family_invoice_payment_snapshot cache_miss key=%s", cache_key)
         build_start = time.perf_counter()
-        snapshot = cls._build_snapshot(user, subject_ids)
+        snapshot = cls._build_snapshot(user, subject_ids, show_deleted)
         logger.info(
             "family_invoice_payment_snapshot build_ms=%.2f rows_count=%s",
             (time.perf_counter() - build_start) * 1000,
@@ -157,14 +165,16 @@ class FamilyInvoicePaymentOverviewQueryMixin:
         return snapshot
 
     @classmethod
-    def _build_snapshot(cls, user, subject_ids):
+    def _build_snapshot(cls, user, subject_ids, show_deleted):
         invoice_queryset = Invoice.objects.filter(
             subject_type__model="insuree",
             subject_id__in=subject_ids,
             thirdparty_type__model="insuree",
-            thirdparty_id__in=subject_ids,
-            is_deleted=False,
-        ).order_by("date_invoice", "id")
+            thirdparty_id__in=subject_ids
+        )
+        if not show_deleted:
+            invoice_queryset = invoice_queryset.filter(is_deleted=False)
+        invoice_queryset = invoice_queryset.order_by("date_invoice", "id")
         if InvoiceConfig.invoice_user_filter:
             invoice_queryset = InvoiceConfig.invoice_user_filter(invoice_queryset, user)
         invoices = list(invoice_queryset)
@@ -209,7 +219,7 @@ class FamilyInvoicePaymentOverviewQueryMixin:
         }
 
     @classmethod
-    def _snapshot_cache_key(cls, user, head_insuree_id, subject_ids):
+    def _snapshot_cache_key(cls, user, head_insuree_id, subject_ids, show_deleted):
         key_payload = {
             "user_id": user.id,
             "head_insuree_id": str(head_insuree_id),
@@ -219,7 +229,7 @@ class FamilyInvoicePaymentOverviewQueryMixin:
         key_hash = hashlib.sha256(
             json.dumps(key_payload, sort_keys=True, default=str).encode("utf-8")
         ).hexdigest()
-        return f"{cls.SNAPSHOT_CACHE_KEY_PREFIX}:{user.id}:{head_insuree_id}:{key_hash}"
+        return f"{cls.SNAPSHOT_CACHE_KEY_PREFIX}:{user.id}:{head_insuree_id}:{show_deleted}:{key_hash}"
 
     @staticmethod
     def _row_dict_to_gql(row):
