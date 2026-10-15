@@ -15,7 +15,6 @@ from invoice.tests.helpers import (
     create_test_payment_invoice_with_details,
 )
 from insuree.test_helpers import create_test_insuree
-from django.contrib.contenttypes.models import ContentType
 
 
 class PaymentInvoiceGQLTest(InvoiceGQLTestCase):
@@ -192,7 +191,6 @@ mutation {{
             search_for_family_invoice_payment_global_show_deleted_false,
             context=self.BaseTestContext(self.user)
         )
-        print("output2 is: ", output2)
         globals_data = output2['data']['familyInvoicePaymentGlobals']
         self.assertEqual(len(globals_data), 3)
         self.assertEqual(float(globals_data["globalBalance"]), 20.10)
@@ -227,7 +225,6 @@ mutation {{
             search_for_family_invoice_payment_overview_deleted_true,
             context=self.BaseTestContext(self.user)
         )
-        print("output sd: ", output)
         self.assertEqual(output["data"]["familyInvoicePaymentOverview"]["totalCount"], 2)
 
         search_for_family_invoice_payment_global_show_deleted_false = F'''
@@ -243,7 +240,6 @@ mutation {{
             search_for_family_invoice_payment_global_show_deleted_false,
             context=self.BaseTestContext(self.user)
         )
-        print("output2 sd is: ", output2)
         globals_data = output2['data']['familyInvoicePaymentGlobals']
         # amount has doubled because deleted invoice shows
         self.assertEqual(float(globals_data["globalBalance"]), 40.20)
