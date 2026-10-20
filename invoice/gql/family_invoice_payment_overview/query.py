@@ -32,6 +32,7 @@ class FamilyInvoicePaymentOverviewItemGQLType(graphene.ObjectType):
     invoice_balance = graphene.Decimal()
     last_payment = graphene.Date()
     has_invoice_payments = graphene.Boolean(required=True)
+    is_deleted = graphene.Boolean()
 
 
 class FamilyInvoicePaymentOverviewPageInfoGQLType(graphene.ObjectType):
@@ -200,6 +201,7 @@ class FamilyInvoicePaymentOverviewQueryMixin:
                     "invoice_id": str(invoice.id),
                     "invoice_code": invoice.code,
                     "covered_from": invoice.date_valid_from.isoformat() if invoice.date_valid_from else None,
+                    "is_deleted": invoice.is_deleted,
                     "covered_to": invoice.date_valid_to.isoformat() if invoice.date_valid_to else None,
                     "amount_due": str(amount_due),
                     "total_invoice_payments": str(total_invoice_payments),
@@ -248,6 +250,7 @@ class FamilyInvoicePaymentOverviewQueryMixin:
             invoice_id=row["invoice_id"],
             invoice_code=row.get("invoice_code"),
             covered_from=_to_date(row.get("covered_from")),
+            is_deleted=bool(row.get("is_deleted")),
             covered_to=_to_date(row.get("covered_to")),
             amount_due=Decimal(row.get("amount_due") or "0"),
             total_invoice_payments=Decimal(row.get("total_invoice_payments") or "0"),
