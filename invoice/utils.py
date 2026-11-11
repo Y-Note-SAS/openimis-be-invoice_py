@@ -38,3 +38,28 @@ def _retrieve_list_of_invoices_bills(payment_invoice, model_type):
         payment=payment_invoice,
         subject_type=ContentType.objects.get_for_model(model_type).id
     ).values_list('subject_id', flat=True))
+
+
+#: The fields of a related subject / third party (insuree, family, policy, health
+#: facility, policy holder, batch run...) a bill or an invoice exposes: what identifies
+#: and names it, never the whole row (an insuree's birth date, phone, address...).
+RELATED_SUMMARY_FIELDS = (
+    "id", "uuid", "code", "chf_id", "name", "trade_name", "last_name", "other_names",
+    "run_year", "run_month", "run_date", "location_id", "head_insuree_id",
+)
+
+
+def related_summary(obj):
+    """{camelCaseField: value} of the RELATED_SUMMARY_FIELDS `obj` has, nothing else."""
+    if obj is None:
+        return None
+    summary = {}
+    for name in RELATED_SUMMARY_FIELDS:
+        try:
+            value = getattr(obj, name)
+        except Exception:  # an attribute raising (a missing relation) is just absent
+            continue
+        if callable(value):
+            continue
+        summary[underscore_to_camel(name)] = value
+    return summary

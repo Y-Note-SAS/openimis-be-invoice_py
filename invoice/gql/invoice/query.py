@@ -3,7 +3,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.db.models import Q
 
 from core.schema import OrderedDjangoFilterConnectionField
-from core.utils import append_validity_filter
+from invoice.gql.row_filters import invoice_row_filters
 from invoice.apps import InvoiceConfig
 from invoice.gql.gql_types.invoice_types import InvoiceGQLType
 from invoice.models import Invoice
@@ -23,7 +23,8 @@ class InvoiceQueryMixin:
     def resolve_invoice(self, info, **kwargs):
         InvoiceQueryMixin._check_permissions(info.context.user)
         filters = []
-        filters += append_validity_filter(**kwargs)
+        # validity applied by Invoice.get_queryset, scoped by its type (OP-2029)
+        invoice_row_filters(info, kwargs, Invoice)
 
         client_mutation_id = kwargs.get("client_mutation_id", None)
         if client_mutation_id:

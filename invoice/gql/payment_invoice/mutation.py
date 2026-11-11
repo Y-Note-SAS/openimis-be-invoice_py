@@ -11,6 +11,7 @@ from core.gql.gql_mutations.base_mutation import (
 )
 from core.schema import OpenIMISMutation
 from invoice.apps import InvoiceConfig
+from invoice.gql.mutation_scope import check_subject_in_scope
 from invoice.gql.input_types import (
     CreatePaymentInvoiceInputType,
     CreatePaymentInvoiceWithDetailInputType,
@@ -108,6 +109,8 @@ class CreatePaymentInvoiceWithDetailMutation(BaseHistoryModelCreateMutationMixin
         if type(user) is AnonymousUser or not user.id or not user.has_perms(
                 InvoiceConfig.gql_invoice_payment_create_perms):
             raise ValidationError("mutation.authentication_required")
+        # the invoice / bill settled must be one the user may see
+        check_subject_in_scope(user, data.get('subject_type'), data.get('subject_id'))
 
     class Input(CreatePaymentInvoiceWithDetailInputType):
         pass

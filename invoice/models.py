@@ -2,7 +2,10 @@ from django.db import models
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 
+from django.conf import settings
+
 from core.models import HistoryBusinessModel, HistoryModel, UUIDModel, ObjectMutation, MutationLog
+from core.models.row_security import GenericScope, ParentScope
 from core.fields import DateField
 from datetime import date
 from invoice.apps import InvoiceConfig
@@ -142,6 +145,10 @@ class GenericInvoiceEvent(GenericInvoiceQuerysetMixin, HistoryModel):
 
 
 class Invoice(GenericInvoice):
+    # seen by whoever sees its subject (a policy, a family, a contract...): each subject
+    # type narrowed by its own model's row security (moved from api_fhir_r4.row_scope)
+    row_scope = GenericScope("subject")
+
     subject_type = models.ForeignKey(ContentType, models.DO_NOTHING,
                                         db_column='SubjectType',  blank=True, null=True, related_name='subject_type', unique=False)
     subject_id = models.CharField(db_column='SubjectId', max_length=255,  blank=True, null=True)  # object is referenced by uuid
@@ -155,6 +162,9 @@ class Invoice(GenericInvoice):
 
 
 class InvoiceLineItem(GenericInvoiceLineItem):
+    # seen by whoever sees its invoice
+    row_scope = ParentScope("invoice")
+
     line_type = models.ForeignKey(
         ContentType, models.DO_NOTHING, db_column='LineType',  blank=True, null=True, related_name='line_type', unique=False)
     line_id = models.CharField(db_column='LineId', max_length=255,  blank=True, null=True)  # object is referenced by uuid
@@ -168,6 +178,9 @@ class InvoiceLineItem(GenericInvoiceLineItem):
 
 
 class InvoicePayment(GenericInvoicePayment):
+    # seen by whoever sees its invoice
+    row_scope = ParentScope("invoice")
+
     invoice = models.ForeignKey(Invoice, models.DO_NOTHING, db_column='InvoiceId', related_name="payments")
 
     class Meta:
@@ -176,6 +189,9 @@ class InvoicePayment(GenericInvoicePayment):
 
 
 class InvoiceEvent(GenericInvoiceEvent):
+    # seen by whoever sees its invoice
+    row_scope = ParentScope("invoice")
+
     invoice = models.ForeignKey(Invoice, models.DO_NOTHING, db_column='InvoiceId', related_name="events")
 
     class Meta:
@@ -184,6 +200,9 @@ class InvoiceEvent(GenericInvoiceEvent):
 
 
 class Bill(GenericInvoice):
+    # seen by whoever sees its subject (a batch run, a policy...), see Invoice.row_scope
+    row_scope = GenericScope("subject")
+
     subject_type = models.ForeignKey(ContentType, models.DO_NOTHING,
                                         db_column='SubjectType', null=True,blank=True, related_name='subject_type_bill',
                                      unique=False)
@@ -198,6 +217,9 @@ class Bill(GenericInvoice):
 
 
 class BillItem(GenericInvoiceLineItem):
+    # seen by whoever sees its bill
+    row_scope = ParentScope("bill")
+
     line_type = models.ForeignKey(
         ContentType, models.DO_NOTHING, db_column='LineType',  blank=True, null=True, related_name='line_type_bill', unique=False)
     line_id = models.CharField(db_column='LineId', max_length=255,  blank=True, null=True)  # object is referenced by uuid
@@ -211,6 +233,9 @@ class BillItem(GenericInvoiceLineItem):
 
 
 class BillPayment(GenericInvoicePayment):
+    # seen by whoever sees its bill
+    row_scope = ParentScope("bill")
+
     bill = models.ForeignKey(Bill, models.DO_NOTHING, db_column='BillId', related_name="payments_bill")
 
     class Meta:
@@ -219,6 +244,9 @@ class BillPayment(GenericInvoicePayment):
 
 
 class BillEvent(GenericInvoiceEvent):
+    # seen by whoever sees its bill
+    row_scope = ParentScope("bill")
+
     bill = models.ForeignKey(Bill, models.DO_NOTHING, db_column='BillId', related_name="events_bill")
 
     class Meta:
@@ -327,12 +355,33 @@ class PaymentInvoice(GenericInvoiceQuerysetMixin, HistoryModel):
 
     objects = GenericInvoiceManager()
 
+    @classmethod
+    def get_queryset(cls, queryset, user=None, *, validity=None, audits=None):
+        """
+        A payment is seen when every invoice / bill it settles is: a payment with a live
+        detail on a subject out of the user's scope is left out (moved from
+        api_fhir_r4.row_scope.scoped_payment_invoices).
+        """
+        queryset = super().get_queryset(queryset, user, validity=validity, audits=audits)
+        if not settings.ROW_SECURITY:
+            return queryset
+        user = cls.scoping_user(user)
+        if user is None or getattr(user, "is_anonymous", True):
+            return queryset
+        details = DetailPaymentInvoice.objects.filter(is_deleted=False)
+        visible = DetailPaymentInvoice.get_queryset(details, user)
+        foreign = details.exclude(id__in=visible.values("id"))
+        return queryset.exclude(id__in=foreign.values("payment_id"))
+
     class Meta:
         managed = True
         db_table = "tblPaymentInvoice"
 
 
 class DetailPaymentInvoice(GenericInvoiceQuerysetMixin, HistoryModel):
+    # seen by whoever sees the invoice / bill it pays
+    row_scope = GenericScope("subject")
+
     class DetailPaymentStatus(models.IntegerChoices):
         REJECTED = 0, _('rejected')
         ACCEPTED = 1, _('accepted')
