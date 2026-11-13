@@ -3,7 +3,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.db.models import Q
 
 from core.schema import OrderedDjangoFilterConnectionField
-from core.utils import append_validity_filter
+from invoice.gql.row_filters import invoice_row_filters
 from invoice.apps import InvoiceConfig
 from invoice.gql.gql_types.bill_types import BillEventGQLType
 from invoice.models import BillEvent, Bill
@@ -23,7 +23,9 @@ class BillEventQueryMixin:
     def resolve_bill_event(self, info, **kwargs):
         BillEventQueryMixin._check_permissions(info.context.user)
         filters = []
-        filters += append_validity_filter(**kwargs)
+        # records the legacy validity arguments on info.context for BillEvent.get_queryset
+        # (OP-2029): no filter to add here, the return value is not needed
+        invoice_row_filters(info, kwargs, BillEvent)
 
         client_mutation_id = kwargs.get("client_mutation_id", None)
         if client_mutation_id:

@@ -8,6 +8,8 @@ from core.gql.gql_mutations.base_mutation import BaseHistoryModelCreateMutationM
     BaseHistoryModelUpdateMutationMixin, BaseHistoryModelDeleteMutationMixin
 from core.schema import OpenIMISMutation
 from invoice.apps import InvoiceConfig
+from invoice.gql.mutation_scope import check_in_scope
+from invoice.models import Invoice
 from invoice.gql.input_types import CreateInvoiceEventType, UpdateInvoiceEventType
 from invoice.models import InvoiceEvent, InvoiceEventMutation
 
@@ -37,6 +39,8 @@ class CreateInvoiceEventMutation(BaseHistoryModelCreateMutationMixin, BaseMutati
         if type(user) is AnonymousUser or not user.id or not user.has_perms(
                 InvoiceConfig.gql_invoice_event_create_message_perms):
             raise PermissionError("Unauthorized")
+        # a message on an invoice the user may see only
+        check_in_scope(user, Invoice, data.get('invoice_id'))
 
     class Input(CreateInvoiceEventType):
         pass

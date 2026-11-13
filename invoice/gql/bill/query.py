@@ -6,7 +6,7 @@ from pandas import DataFrame
 
 from core.gql.export_mixin import ExportableQueryMixin
 from core.schema import OrderedDjangoFilterConnectionField
-from core.utils import append_validity_filter
+from invoice.gql.row_filters import invoice_row_filters
 from invoice.apps import InvoiceConfig
 from invoice.gql.gql_types.bill_types import BillGQLType
 from invoice.models import Bill
@@ -57,7 +57,9 @@ class BillQueryMixin(ExportableQueryMixin):
     def resolve_bill(self, info, **kwargs):
         BillQueryMixin._check_permissions(info.context.user)
         filters = []
-        filters += append_validity_filter(**kwargs)
+        # records the legacy validity arguments on info.context for Bill.get_queryset
+        # (OP-2029): no filter to add here, the return value is not needed
+        invoice_row_filters(info, kwargs, Bill)
 
         client_mutation_id = kwargs.get("client_mutation_id", None)
         if client_mutation_id:

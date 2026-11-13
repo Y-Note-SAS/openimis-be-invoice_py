@@ -4,14 +4,15 @@ from django.core.serializers.json import DjangoJSONEncoder
 from graphene_django import DjangoObjectType
 
 from core import prefix_filterset, ExtendedConnection
+from core.gql import ScopedQuerysetMixin
 from invoice.gql.filter_mixin import GenericFilterGQLTypeMixin
 from invoice.models import Bill, \
     BillItem, BillEvent, BillPayment
-from invoice.utils import underscore_to_camel
+from invoice.utils import underscore_to_camel, related_summary
 from location.models import Location
 
 
-class BillGQLType(DjangoObjectType, GenericFilterGQLTypeMixin):
+class BillGQLType(ScopedQuerysetMixin, DjangoObjectType, GenericFilterGQLTypeMixin):
     subject = graphene.JSONString()
     subject_type = graphene.Int()
     subject_type_name = graphene.String()
@@ -37,27 +38,22 @@ class BillGQLType(DjangoObjectType, GenericFilterGQLTypeMixin):
 
     def resolve_subject(root, info):
         if root.subject:
-            subject_object_dict = root.subject.__dict__
-            subject_object_dict.pop('_state')
-            subject_object_dict = {
-                underscore_to_camel(k): v for k, v in list(subject_object_dict.items())
-            }
-            if root.subject_type.name == "batch run":
+            # identifying fields only, not the whole row of the subject
+            subject_object_dict = related_summary(root.subject)
+            if root.subject_type.name == "batch run" and subject_object_dict.get('locationId', None):
                 location = Location.objects.filter(id=subject_object_dict['locationId'], validity_to__isnull=True)
-                location = location.values('code', 'name')
-                subject_object_dict['location'] = {
-                    underscore_to_camel(k): v for k, v in location.first().items()
-                }
+                location = location.values('code', 'name').first()
+                if location:
+                    subject_object_dict['location'] = {
+                        underscore_to_camel(k): v for k, v in location.items()
+                    }
             subject_object_dict = json.dumps(subject_object_dict, cls=DjangoJSONEncoder)
             return subject_object_dict
 
     def resolve_thirdparty(root, info):
         if root.thirdparty:
-            thirdparty_object_dict = root.thirdparty.__dict__
-            thirdparty_object_dict.pop('_state')
-            thirdparty_object_dict = {
-                underscore_to_camel(k): v for k, v in list(thirdparty_object_dict.items())
-            }
+            # identifying fields only: the third party may be an insuree, a facility...
+            thirdparty_object_dict = related_summary(root.thirdparty)
             thirdparty_object_dict = json.dumps(thirdparty_object_dict, cls=DjangoJSONEncoder)
             return thirdparty_object_dict
 
@@ -71,12 +67,8 @@ class BillGQLType(DjangoObjectType, GenericFilterGQLTypeMixin):
 
         connection_class = ExtendedConnection
 
-        @classmethod
-        def get_queryset(cls, queryset, info):
-            return Bill.get_queryset(queryset, info)
 
-
-class BillItemGQLType(DjangoObjectType, GenericFilterGQLTypeMixin):
+class BillItemGQLType(ScopedQuerysetMixin, DjangoObjectType, GenericFilterGQLTypeMixin):
     line_type = graphene.Int()
     line_type_name = graphene.String()
     line = graphene.JSONString()
@@ -111,12 +103,8 @@ class BillItemGQLType(DjangoObjectType, GenericFilterGQLTypeMixin):
 
         connection_class = ExtendedConnection
 
-        @classmethod
-        def get_queryset(cls, queryset, info):
-            return BillItem.get_queryset(queryset, info)
 
-
-class BillPaymentGQLType(DjangoObjectType, GenericFilterGQLTypeMixin):
+class BillPaymentGQLType(ScopedQuerysetMixin, DjangoObjectType, GenericFilterGQLTypeMixin):
     class Meta:
         model = BillPayment
         interfaces = (graphene.relay.Node,)
@@ -127,12 +115,8 @@ class BillPaymentGQLType(DjangoObjectType, GenericFilterGQLTypeMixin):
 
         connection_class = ExtendedConnection
 
-        @classmethod
-        def get_queryset(cls, queryset, info):
-            return BillPayment.get_queryset(queryset, info)
 
-
-class BillEventGQLType(DjangoObjectType, GenericFilterGQLTypeMixin):
+class BillEventGQLType(ScopedQuerysetMixin, DjangoObjectType, GenericFilterGQLTypeMixin):
     class Meta:
         model = BillEvent
         interfaces = (graphene.relay.Node,)
@@ -142,7 +126,3 @@ class BillEventGQLType(DjangoObjectType, GenericFilterGQLTypeMixin):
         }
 
         connection_class = ExtendedConnection
-
-        @classmethod
-        def get_queryset(cls, queryset, info):
-            return BillEvent.get_queryset(queryset, info)

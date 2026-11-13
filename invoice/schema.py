@@ -1,5 +1,6 @@
 import graphene
 
+from core.models import Validity
 from core.schema import signal_mutation_module_validate
 from invoice.gql import query_mixins
 from invoice.gql.invoice import DeleteInvoiceMutation, GenerateTimeframeInvoices
@@ -93,7 +94,9 @@ def _on_mutation_log(mutation_model, model, obj_type, sender, **kwargs):
         uuids = [uuid] if uuid else []
     if not uuids:
         return []
-    impacted = model.objects.filter(uuid__in=uuids).all()
+    # only the rows the user may see get the mutation linked
+    impacted = model.get_queryset(
+        model.objects.filter(uuid__in=uuids), kwargs.get('user'), validity=Validity.ALL)
     for item in impacted:
         mutation_model.objects.create(
             **{obj_type: item, 'mutation_id':kwargs['mutation_log_id']}

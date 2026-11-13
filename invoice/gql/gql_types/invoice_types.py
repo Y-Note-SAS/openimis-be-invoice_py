@@ -5,13 +5,14 @@ from graphene_django import DjangoObjectType
 
 from core import prefix_filterset, ExtendedConnection
 from insuree.models import Insuree
+from core.gql import ScopedQuerysetMixin
 from invoice.gql.filter_mixin import GenericFilterGQLTypeMixin
 from invoice.models import Invoice, InvoiceLineItem, InvoicePayment, InvoiceEvent, InvoiceMutation, \
     InvoicePaymentMutation, InvoiceLineItemMutation, InvoiceEventMutation
-from invoice.utils import underscore_to_camel
+from invoice.utils import underscore_to_camel, related_summary
 
 
-class InvoiceGQLType(DjangoObjectType, GenericFilterGQLTypeMixin):
+class InvoiceGQLType(ScopedQuerysetMixin, DjangoObjectType, GenericFilterGQLTypeMixin):
     subject = graphene.JSONString()
     subject_type = graphene.Int()
     subject_type_name = graphene.String()
@@ -37,12 +38,9 @@ class InvoiceGQLType(DjangoObjectType, GenericFilterGQLTypeMixin):
 
     def resolve_subject(root, info):
         if root.subject:
-            subject_object_dict = root.subject.__dict__
-            subject_object_dict.pop('_state')
-            subject_object_dict = {
-                underscore_to_camel(k): v for k, v in list(subject_object_dict.items())
-            }
-            if root.subject_type.name == "family":
+            # identifying fields only, not the whole row of the subject
+            subject_object_dict = related_summary(root.subject)
+            if root.subject_type.name == "family" and subject_object_dict.get('headInsureeId'):
                 insuree = Insuree.objects.filter(id=subject_object_dict['headInsureeId'], validity_to__isnull=True)
                 insuree = insuree.values('id', 'chf_id', 'uuid', 'last_name', 'other_names')
                 subject_object_dict['headInsuree'] = {
@@ -53,12 +51,8 @@ class InvoiceGQLType(DjangoObjectType, GenericFilterGQLTypeMixin):
 
     def resolve_thirdparty(root, info):
         if root.thirdparty:
-            thirdparty_object_dict = root.thirdparty.__dict__
-
-            thirdparty_object_dict.pop('_state')
-            thirdparty_object_dict = {
-                underscore_to_camel(k): v for k, v in list(thirdparty_object_dict.items())
-            }
+            # identifying fields only: the head insuree of a policy invoice, not their row
+            thirdparty_object_dict = related_summary(root.thirdparty)
             thirdparty_object_dict = json.dumps(thirdparty_object_dict, cls=DjangoJSONEncoder)
             return thirdparty_object_dict
 
@@ -72,12 +66,8 @@ class InvoiceGQLType(DjangoObjectType, GenericFilterGQLTypeMixin):
 
         connection_class = ExtendedConnection
 
-        @classmethod
-        def get_queryset(cls, queryset, info):
-            return Invoice.get_queryset(queryset, info)
 
-
-class InvoiceLineItemGQLType(DjangoObjectType, GenericFilterGQLTypeMixin):
+class InvoiceLineItemGQLType(ScopedQuerysetMixin, DjangoObjectType, GenericFilterGQLTypeMixin):
     line = graphene.JSONString()
     line_type = graphene.Int()
     line_type_name = graphene.String()
@@ -112,12 +102,8 @@ class InvoiceLineItemGQLType(DjangoObjectType, GenericFilterGQLTypeMixin):
 
         connection_class = ExtendedConnection
 
-        @classmethod
-        def get_queryset(cls, queryset, info):
-            return InvoiceLineItem.get_queryset(queryset, info)
 
-
-class InvoicePaymentGQLType(DjangoObjectType, GenericFilterGQLTypeMixin):
+class InvoicePaymentGQLType(ScopedQuerysetMixin, DjangoObjectType, GenericFilterGQLTypeMixin):
     class Meta:
         model = InvoicePayment
         interfaces = (graphene.relay.Node,)
@@ -128,12 +114,8 @@ class InvoicePaymentGQLType(DjangoObjectType, GenericFilterGQLTypeMixin):
 
         connection_class = ExtendedConnection
 
-        @classmethod
-        def get_queryset(cls, queryset, info):
-            return InvoicePayment.get_queryset(queryset, info)
 
-
-class InvoiceEventGQLType(DjangoObjectType, GenericFilterGQLTypeMixin):
+class InvoiceEventGQLType(ScopedQuerysetMixin, DjangoObjectType, GenericFilterGQLTypeMixin):
     class Meta:
         model = InvoiceEvent
         interfaces = (graphene.relay.Node,)
@@ -143,10 +125,6 @@ class InvoiceEventGQLType(DjangoObjectType, GenericFilterGQLTypeMixin):
         }
 
         connection_class = ExtendedConnection
-
-        @classmethod
-        def get_queryset(cls, queryset, info):
-            return InvoiceEvent.get_queryset(queryset, info)
 
 
 class InvoiceMutationGQLType(DjangoObjectType):

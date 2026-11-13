@@ -6,6 +6,8 @@ from core.gql.gql_mutations.base_mutation import BaseMutation, BaseCreateMutatio
     BaseHistoryModelCreateMutationMixin, BaseHistoryModelUpdateMutationMixin, BaseHistoryModelDeleteMutationMixin
 from core.schema import OpenIMISMutation
 from invoice.apps import InvoiceConfig
+from invoice.gql.mutation_scope import check_in_scope
+from invoice.models import Invoice
 from invoice.gql.input_types import CreatePaymentInputType, UpdatePaymentInputType
 from invoice.models import InvoicePayment, InvoicePaymentMutation
 
@@ -35,6 +37,8 @@ class CreateInvoicePaymentMutation(BaseHistoryModelCreateMutationMixin, BaseMuta
         if type(user) is AnonymousUser or not user.id or not user.has_perms(
                 InvoiceConfig.gql_invoice_payment_create_perms):
             raise ValidationError("mutation.authentication_required")
+        # the invoice paid must be one the user may see
+        check_in_scope(user, Invoice, data.get('invoice_id'))
 
     class Input(CreatePaymentInputType):
         pass
@@ -50,6 +54,7 @@ class UpdateInvoicePaymentMutation(BaseHistoryModelUpdateMutationMixin, BaseMuta
         if type(user) is AnonymousUser or not user.id or not user.has_perms(
                 InvoiceConfig.gql_invoice_update_perms):
             raise ValidationError("mutation.authentication_required")
+        check_in_scope(user, Invoice, data.get('invoice_id'))
 
     class Input(UpdatePaymentInputType):
         pass
