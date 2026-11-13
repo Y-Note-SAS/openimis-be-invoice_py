@@ -13,7 +13,11 @@ def invoice_row_filters(info, kwargs, model):
     - applyDefaultValidityFilter: the rows still valid from now on;
     - neither: every row, deleted ones included (an explicit isDeleted narrows it).
 
-    The resolver no longer filters validity itself.
+    Nothing to add to the resolver's filters: like core.gql.legacy_row_filters, this
+    records the validity on `info.context`, where the connection's resolve_queryset
+    reads it back (explicit isDeleted / showHistory arguments over it) and hands it to
+    `model.get_queryset`. The returned {'validity', 'audits'} is for a resolver that
+    needs the same rows itself, an existence check say; the query resolvers ignore it.
     """
     date_from = kwargs.get('dateValidFrom__Gte')
     date_to = kwargs.get('dateValidTo__Lte')

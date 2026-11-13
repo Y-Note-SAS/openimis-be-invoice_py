@@ -23,7 +23,8 @@ class InvoiceLineItemQueryMixin:
     def resolve_invoice_line_item(self, info, **kwargs):
         InvoiceLineItemQueryMixin._check_invoice_permissions(info.context.user)
         filters = []
-        # validity applied by InvoiceLineItem.get_queryset, scoped by its type (OP-2029)
+        # records the legacy validity arguments on info.context for InvoiceLineItem.get_queryset
+        # (OP-2029): no filter to add here, the return value is not needed
         invoice_row_filters(info, kwargs, InvoiceLineItem)
 
         client_mutation_id = kwargs.get("client_mutation_id", None)

@@ -1,6 +1,7 @@
 import re
 
 from django.contrib.contenttypes.models import ContentType
+from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Q
 
 from invoice.models import (
@@ -57,7 +58,7 @@ def related_summary(obj):
     for name in RELATED_SUMMARY_FIELDS:
         try:
             value = getattr(obj, name)
-        except Exception:  # an attribute raising (a missing relation) is just absent
+        except (AttributeError, ObjectDoesNotExist):  # a missing field or relation is just absent
             continue
         if callable(value):
             continue

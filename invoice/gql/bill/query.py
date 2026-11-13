@@ -57,7 +57,8 @@ class BillQueryMixin(ExportableQueryMixin):
     def resolve_bill(self, info, **kwargs):
         BillQueryMixin._check_permissions(info.context.user)
         filters = []
-        # validity applied by Bill.get_queryset, scoped by its type (OP-2029)
+        # records the legacy validity arguments on info.context for Bill.get_queryset
+        # (OP-2029): no filter to add here, the return value is not needed
         invoice_row_filters(info, kwargs, Bill)
 
         client_mutation_id = kwargs.get("client_mutation_id", None)
